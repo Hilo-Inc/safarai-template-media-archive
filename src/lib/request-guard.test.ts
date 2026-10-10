@@ -63,3 +63,10 @@ describe('safeNext dot-segment and encoding tricks', () => {
     expect(safeNext('/%61dmin', 'admin')).toBe('/%61dmin');
   });
 });
+
+describe('safeNext decoded dot segments', () => {
+  it('keeps viewers out of admin', () => {
+    expect(safeNext('/%2e%2e%2fadmin', 'viewer')).toBe('/');
+    expect(safeNext('/foo%2f..%2fadmin', 'viewer')).toBe('/');
+  });
+});

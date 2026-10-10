@@ -6,12 +6,15 @@ export type Decision = 'allow' | 'login' | 'unauthorized' | 'forbidden';
 const ALWAYS = new Set(['/login', '/api/login', '/api/logout', '/healthz']);
 
 /**
- * The path as the router sees it: percent-decoded, then repeated slashes collapsed, so "/%61dmin"
+ * The path as the router sees it: percent-decoded, repeated slashes collapsed and dot segments resolved, so "/%61dmin"
  * and "//admin" are judged as "/admin". Null for a malformed escape.
  */
 export function normalizePath(path: string): string | null {
   try {
-    return decodeURIComponent(path).replace(/\/{2,}/g, '/');
+    const decoded = decodeURIComponent(path).replace(/\/{2,}/g, '/');
+    // Resolve dot segments that decoding exposed ("/foo%2f..%2fadmin"); keep ? and # as path characters.
+    const literal = decoded.replace(/[?#]/g, (c) => encodeURIComponent(c));
+    return new URL(literal, 'http://x').pathname.replace(/\/{2,}/g, '/');
   } catch {
     return null;
   }

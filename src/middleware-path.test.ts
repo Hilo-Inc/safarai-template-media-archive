@@ -18,3 +18,13 @@ describe('normalizePath', () => {
     expect(normalizePath('/%E0%A4%A')).toBeNull();
   });
 });
+
+describe('normalizePath dot segments', () => {
+  it('resolves dot segments exposed by decoding', () => {
+    expect(normalizePath('/%2e%2e%2fadmin')).toBe('/admin');
+    expect(normalizePath('/foo%2f..%2fadmin')).toBe('/admin');
+    expect(normalizePath('/.%2fadmin')).toBe('/admin');
+    expect(normalizePath('/a%3f/..%2fadmin')).toBe('/admin');
+    expect(access(normalizePath('/foo%2f..%2fadmin')!, 'public', null)).toBe('login');
+  });
+});

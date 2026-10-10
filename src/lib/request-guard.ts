@@ -43,7 +43,8 @@ export function safeNext(next: unknown, role: Role): string {
   // Dot segments resolve to "//host" (protocol-relative) in the browser; a decoded backslash is equally unsafe.
   if (url.pathname.startsWith('//')) return '/';
   const path = normalizePath(url.pathname);
-  if (path === null || path.includes('\\')) return '/';
+  // normalizePath resolves a decoded backslash to a slash, so check the decoded raw path for it first.
+  if (path === null || decodeURIComponent(url.pathname).includes('\\')) return '/';
   if (role !== 'admin' && (path === '/admin' || path.startsWith('/admin/'))) return '/';
   return url.pathname + url.search + url.hash;
 }
