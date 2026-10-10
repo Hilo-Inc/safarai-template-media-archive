@@ -2,7 +2,7 @@ import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 import { describe, expect, it } from 'vitest';
 import { isNormalPath } from '../indexer/import-files';
 import { MAX_PATH_LENGTH } from '../lib/upload-key';
-import { batches, chunkSize, listFiles, MAX_PATH, MIN_PART, normalizePath, planUploads, toEntries, type Source } from './listing';
+import { batches, chunkSize, listFiles, listFilesNamingZip, MAX_PATH, MIN_PART, normalizePath, planUploads, toEntries, type Source } from './listing';
 
 async function zip(name: string, files: Record<string, string>): Promise<File> {
   const writer = new ZipWriter(new BlobWriter('application/zip'));
@@ -115,5 +115,14 @@ describe('chunkSize and batches', () => {
   it('groups files up to the byte limit; a large file is a batch of its own', () => {
     const out = batches([source('a', 4), source('b', 4), source('c', 10), source('d', 1)], 8);
     expect(out.map((b) => b.map((s) => s.path))).toEqual([['a', 'b'], ['c'], ['d']]);
+  });
+});
+
+describe('listFilesNamingZip', () => {
+  it('names the zip that cannot be read', async () => {
+    const good = await zip('good.zip', { 'a.jpg': 'a' });
+    const bad = new File(['this is not a zip'], 'broken.zip', { type: 'application/zip' });
+    await expect(listFilesNamingZip([good, bad])).rejects.toThrow('broken.zip');
+    expect([...(await listFilesNamingZip([good])).sources.keys()]).toEqual(['a.jpg']);
   });
 });

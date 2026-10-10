@@ -6,20 +6,23 @@ interface Props {
   description?: string;
   visibility: Visibility;
   /** Open Graph tags; ignored in password mode. */
+  /** Admin pages: noindex, no feed or Open Graph tags. */
+  admin?: boolean;
   og?: { title: string; description: string; url: string | null; image: string | null } | null;
 }
 
-const { title, description, visibility, og } = Astro.props;
-const isPublic = visibility === 'public';
+const { title, description, visibility, admin = false, og } = Astro.props;
+const isPublic = visibility === 'public' && !admin;
+const noindex = visibility !== 'public' || admin;
 ---
 <!doctype html>
-<html lang="en" data-visibility={visibility}>
+<html lang="en" data-visibility={visibility} data-admin={admin ? '' : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
-    {!isPublic && <meta name="robots" content="noindex, nofollow" />}
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     {isPublic && <link rel="alternate" type="application/feed+json" href="/feed.json" />}
     {isPublic && <link rel="alternate" type="application/rss+xml" href="/rss.xml" />}
     {isPublic && og && (

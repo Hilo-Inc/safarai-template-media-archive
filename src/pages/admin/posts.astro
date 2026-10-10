@@ -1,0 +1,52 @@
+---
+import AdminLayout from '../../components/AdminLayout.astro';
+import { formatDate } from '../../render/format';
+import { loadAdminPosts } from '../../server/admin';
+import { pageDeps } from '../../server/pages';
+
+const index = await loadAdminPosts(pageDeps());
+const thumb = (p: (typeof index.posts)[number]) =>
+  p.cover ? ([...p.cover.variants].sort((a, b) => a.w - b.w).find((v) => v.w >= 320)?.src ?? p.cover.src) : null;
+---
+<AdminLayout title="Posts" current="/admin/posts">
+  <form class="filter" data-filter>
+    <input type="search" name="text" placeholder="Search captions" aria-label="Search captions" />
+    <select name="show" aria-label="Show">
+      <option value="all">All</option>
+      <option value="visible">Visible</option>
+      <option value="hidden">Hidden</option>
+      <option value="featured">Featured</option>
+    </select>
+    <span class="hint" data-count>{index.posts.length} posts</span>
+  </form>
+  {index.posts.length === 0 && <p class="hint">No posts yet. <a href="/admin">Import your files.</a></p>}
+  <ul class="posts" data-posts>
+    {index.posts.map((p) => (
+      <li data-id={p.id} data-caption={p.caption}>
+        <a href={`/p/${p.id}`} class="thumb">{thumb(p) ? <img src={thumb(p)} alt="" width="96" height="96" loading="lazy" /> : <span>{p.kind}</span>}</a>
+        <div class="fields">
+          <p class="meta">{formatDate(p.published)} · {p.kind} · {p.platform}{p.count > 1 && ` · ${p.count} items`}</p>
+          <label><input type="checkbox" data-field="hidden" checked={p.hidden} /> Hidden</label>
+          <label><input type="checkbox" data-field="featured" checked={p.featured} /> Featured</label>
+          <button type="button" data-edit>Edit caption, alt text and place</button>
+          <p class="error" data-error></p>
+        </div>
+      </li>
+    ))}
+  </ul>
+</AdminLayout>
+
+<script>
+  import '../../client/admin-posts';
+</script>
+
+<style>
+  .filter { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  .posts { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
+  .posts > li { display: grid; grid-template-columns: 96px 1fr; gap: 0.75rem; border-bottom: 1px solid var(--line); padding-bottom: 0.75rem; }
+  .thumb img, .thumb span { width: 96px; height: 96px; object-fit: cover; background: var(--tile); display: grid; place-items: center; color: var(--muted); }
+  .fields { display: grid; gap: 0.3rem; align-content: start; }
+  .fields :global(textarea) { width: 100%; min-height: 5rem; }
+  .meta, .hint { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .fields :global(.saving) { opacity: 0.6; }
+</style>

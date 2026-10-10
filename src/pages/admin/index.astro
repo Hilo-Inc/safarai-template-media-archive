@@ -1,0 +1,56 @@
+---
+import AdminLayout from '../../components/AdminLayout.astro';
+import { loadConfig } from '../../config/load';
+import { getEnv } from '../../env';
+import { readJson } from '../../lib/json-cache';
+import { feedNotice } from '../../server/admin';
+import { readSite } from '../../server/pages';
+
+const notice = feedNotice(loadConfig(), getEnv(), await readSite(readJson));
+---
+<AdminLayout title="Import" current="/admin">
+  {notice && <p class="notice">{notice}</p>}
+
+  <section class="drop" data-drop>
+    <p><strong>Drop your export zips here</strong>, or a folder of photos, videos and music.</p>
+    <p>
+      <label><input type="file" multiple data-pick-files accept=".zip,image/*,video/*,audio/*,.json,.vtt,.srt" /> Choose files</label>
+      <label><input type="file" {...{ webkitdirectory: true }} data-pick-folder /> Choose a folder</label>
+    </p>
+    <p class="hint">Only photos, videos, audio and their caption files are uploaded. Messages, contacts and other personal data stay on your computer. <a href="/admin/export-guide">What can I import?</a></p>
+  </section>
+
+  <section class="plan" data-plan hidden>
+    <p data-plan-text></p>
+    <p class="error" data-plan-error></p>
+    <button type="button" class="primary" data-upload>Upload</button>
+    <button type="button" data-discard>Cancel</button>
+  </section>
+
+  <section class="progress" data-progress hidden>
+    <progress max="1" value="0" data-bar></progress>
+    <p data-progress-text></p>
+    <button type="button" data-stop>Stop</button>
+  </section>
+
+  <h2>Imports</h2>
+  <p><button type="button" data-reindex>Re-index</button> <span class="hint">Processes files placed in the bucket's <code>inbox/</code> folder, or rebuilds the pages.</span></p>
+  <ul class="imports" data-imports><li class="hint">Loading…</li></ul>
+</AdminLayout>
+
+<script>
+  import '../../client/admin-import';
+</script>
+
+<style>
+  .drop { border: 2px dashed var(--line); border-radius: 0.5rem; padding: 2rem 1rem; text-align: center; }
+  .drop.over { border-color: var(--accent); background: var(--tile); }
+  .drop label { margin: 0 0.5rem; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 0.9rem; }
+  .plan, .progress { margin: 1rem 0; }
+  progress { width: 100%; height: 1rem; }
+  .imports { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
+  .imports :global(li) { border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.6rem 0.8rem; display: grid; gap: 0.3rem; }
+  .imports :global(.row-actions) { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .imports :global(details) { font-size: 0.9rem; }
+</style>

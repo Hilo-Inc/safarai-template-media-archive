@@ -1,0 +1,51 @@
+---
+import AdminLayout from '../../components/AdminLayout.astro';
+import { readJson } from '../../lib/json-cache';
+import { defaultSigner } from '../../lib/media-url';
+import { readSite } from '../../server/pages';
+
+const site = await readSite(readJson);
+const avatarUrl = site.avatar ? await defaultSigner()(site.avatar) : null;
+const MAX_LINKS = 5; // siteInputSchema allows 5 links
+const blank = { label: '', url: '' };
+const links = [...site.links, blank, blank, blank].slice(0, Math.min(MAX_LINKS, Math.max(site.links.length + 1, 3)));
+---
+<AdminLayout title="Site" current="/admin/site">
+  <form class="site" data-site-form>
+    <label>Title <input name="title" required maxlength="80" value={site.title} /></label>
+    <label>Bio <textarea name="bio" maxlength="500">{site.bio}</textarea></label>
+    <fieldset>
+      <legend>Links</legend>
+      {links.map((l) => (
+        <div class="link" data-link>
+          <input name="label" placeholder="Label" maxlength="40" value={l.label} aria-label="Link label" />
+          <input name="url" type="url" placeholder="https://…" value={l.url} aria-label="Link address" />
+        </div>
+      ))}
+    </fieldset>
+    <button type="submit" class="primary">Save</button>
+    <span data-site-status role="status"></span>
+  </form>
+
+  <form class="avatar" data-avatar-form>
+    <h2>Avatar</h2>
+    {avatarUrl ? <img src={avatarUrl} alt="Current avatar" width="96" height="96" data-avatar-img /> : <p class="hint" data-avatar-img>No avatar yet.</p>}
+    <input type="file" name="file" accept="image/*" required />
+    <button type="submit">Upload</button>
+    <span data-avatar-status role="status"></span>
+  </form>
+</AdminLayout>
+
+<script>
+  import '../../client/admin-site';
+</script>
+
+<style>
+  .site, .avatar { display: grid; gap: 0.6rem; max-width: 36rem; margin-bottom: 2rem; }
+  label { display: grid; gap: 0.2rem; }
+  textarea { min-height: 5rem; }
+  fieldset { border: 1px solid var(--line); border-radius: 0.4rem; display: grid; gap: 0.4rem; }
+  .link { display: grid; grid-template-columns: 1fr 2fr; gap: 0.4rem; }
+  .avatar img { border-radius: 50%; object-fit: cover; }
+  .hint { color: var(--muted); }
+</style>

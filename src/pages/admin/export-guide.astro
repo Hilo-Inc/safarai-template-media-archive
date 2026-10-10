@@ -1,0 +1,21 @@
+---
+import AdminLayout from '../../components/AdminLayout.astro';
+---
+<AdminLayout title="Export guide" current="/admin/export-guide">
+  <p>The importer reads photos, videos and audio, and the caption files that some download tools save next to them. Drop zips or folders on the Import page; everything else stays on your computer.</p>
+
+  <h2>Plain files</h2>
+  <p>Photos (JPEG, PNG, WebP, HEIC, GIF), videos (MP4, MOV, WebM, MKV) and audio (MP3, M4A, WAV, FLAC, OGG). Each file becomes one post, dated by the file's date. You can add captions afterwards on the Posts page.</p>
+
+  <h2>Videos and music saved with yt-dlp</h2>
+  <p>Run yt-dlp with <code>--write-info-json</code> (and <code>--write-subs</code> for subtitles). The title, description, tags, upload date and original link come from the <code>.info.json</code> file next to each video, and <code>.vtt</code> or <code>.srt</code> files become subtitles.</p>
+
+  <h2>Photo posts saved with gallery-dl</h2>
+  <p>Run gallery-dl with <code>--write-metadata</code>. Files of the same post are grouped into one post in their original order, with the caption and date from the <code>.json</code> files.</p>
+
+  <h2>Instagram and Facebook exports</h2>
+  <p>The importer for the zips you download from Instagram or Facebook ("Download your information") arrives in a later update. Until then, an export like that is refused as a whole, and nothing in it is uploaded.</p>
+
+  <h2>What is never uploaded</h2>
+  <p>Messages, contacts, followers, login and security records, ads data, and anything else that is not a photo, video, audio file or its caption file. GPS positions are removed from photos and videos unless the site's configuration keeps them.</p>
+</AdminLayout>

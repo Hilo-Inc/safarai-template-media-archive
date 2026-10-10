@@ -108,3 +108,19 @@ export function batches(todo: Source[], maxBytes: number): Source[][] {
   if (current.length > 0) out.push(current);
   return out;
 }
+
+/** Like listFiles, but when a zip cannot be read the error names it (and nothing is listed). */
+export async function listFilesNamingZip(files: File[]): ReturnType<typeof listFiles> {
+  try {
+    return await listFiles(files);
+  } catch (error) {
+    for (const file of files.filter(isZip)) {
+      try {
+        await listFiles([file]);
+      } catch {
+        throw new Error(`Could not read "${file.name}". It may be damaged or not a zip file. Nothing was uploaded.`);
+      }
+    }
+    throw error;
+  }
+}
