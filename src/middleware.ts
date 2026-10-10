@@ -17,6 +17,7 @@ const json = (status: number, error: string) =>
 export const onRequest = defineMiddleware(async (context, next) => {
   const { search } = context.url;
   const pathname = normalizePath(context.url.pathname);
+  if (pathname === null) return json(400, 'Bad request');
   const mode = loadConfig().visibility;
 
   if (isApi(pathname)) {
@@ -30,7 +31,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const decision = access(pathname, mode, role);
   if (decision === 'unauthorized') return json(401, 'Sign in first');
   if (decision === 'forbidden') return json(403, 'Only the owner can do this');
-  if (decision === 'login') return lock(context.redirect(`/login?next=${encodeURIComponent(pathname + search)}`, 303));
+  if (decision === 'login') return lock(context.redirect(`/login?next=${encodeURIComponent(context.url.pathname + search)}`, 303));
 
   const response = await next();
   if (mode === 'password') {

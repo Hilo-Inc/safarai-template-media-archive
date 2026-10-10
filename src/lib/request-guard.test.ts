@@ -50,3 +50,16 @@ describe('safeNext open-redirect hardening', () => {
     expect(safeNext('/admin?x=1', 'viewer')).toBe('/');
   });
 });
+
+describe('safeNext dot-segment and encoding tricks', () => {
+  it('falls back when resolution yields a protocol-relative path', () => {
+    for (const bad of ['/.//evil.example', '/a/..//evil.example', '/%2e//evil.example', '/%2e%2e//evil.example', '/%5Cevil.example', '/%E0%A4%A']) {
+      expect(safeNext(bad, 'admin')).toBe('/');
+    }
+  });
+  it('judges encoded admin paths for viewers', () => {
+    expect(safeNext('/%61dmin', 'viewer')).toBe('/');
+    expect(safeNext('/%61dmin/x', 'viewer')).toBe('/');
+    expect(safeNext('/%61dmin', 'admin')).toBe('/%61dmin');
+  });
+});

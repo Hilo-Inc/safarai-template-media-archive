@@ -1,3 +1,4 @@
+import { normalizePath } from './access';
 import type { Role } from './session';
 
 const WRITE_TYPES = ['application/json', 'multipart/form-data'];
@@ -39,6 +40,10 @@ export function safeNext(next: unknown, role: Role): string {
     return '/';
   }
   if (url.origin !== 'http://x') return '/';
-  if (role !== 'admin' && (url.pathname === '/admin' || url.pathname.startsWith('/admin/'))) return '/';
+  // Dot segments resolve to "//host" (protocol-relative) in the browser; a decoded backslash is equally unsafe.
+  if (url.pathname.startsWith('//')) return '/';
+  const path = normalizePath(url.pathname);
+  if (path === null || path.includes('\\')) return '/';
+  if (role !== 'admin' && (path === '/admin' || path.startsWith('/admin/'))) return '/';
   return url.pathname + url.search + url.hash;
 }

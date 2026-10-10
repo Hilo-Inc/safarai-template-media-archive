@@ -5,9 +5,16 @@ export type Decision = 'allow' | 'login' | 'unauthorized' | 'forbidden';
 
 const ALWAYS = new Set(['/login', '/api/login', '/api/logout', '/healthz']);
 
-/** Collapse repeated slashes so "//admin" is judged as "/admin". */
-export function normalizePath(path: string): string {
-  return path.replace(/\/{2,}/g, '/');
+/**
+ * The path as the router sees it: percent-decoded, then repeated slashes collapsed, so "/%61dmin"
+ * and "//admin" are judged as "/admin". Null for a malformed escape.
+ */
+export function normalizePath(path: string): string | null {
+  try {
+    return decodeURIComponent(path).replace(/\/{2,}/g, '/');
+  } catch {
+    return null;
+  }
 }
 
 export function isApi(path: string): boolean {
