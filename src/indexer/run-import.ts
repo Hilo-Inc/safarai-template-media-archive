@@ -10,7 +10,7 @@ import { POST_ID_RE, postSchema, type MediaItem, type Post } from '../schema/pos
 import { ImportError } from './errors';
 import { inboxImportFiles, uploadedImportFiles } from './import-files';
 import { applyLocation } from './location';
-import { writePost } from './overrides';
+import { readOverrides, writePost } from './overrides';
 import { processItem, type ItemResult } from './process-item';
 import { addFailure, readStatus, writeStatus, type ImportStatus } from './status';
 
@@ -94,6 +94,8 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     const raws = await importer.read(listing, config);
     status.posts.total = raws.length;
 
+    // Unreadable overrides fail the import here, before any media work (writePost would refuse after files were processed).
+    await readOverrides(store);
     await mkdir(deps.workRoot, { recursive: true });
     const done = new Set(status.doneIds);
     let handled = 0;
@@ -148,8 +150,8 @@ async function importOne(
     return;
   }
 
-  const dir = await mkdtemp(join(deps.workRoot, 'post-'));
   const before = new Set((await store.list(keys.mediaPrefix(postId))).map((o) => o.key));
+  const dir = await mkdtemp(join(deps.workRoot, 'post-'));
   let finished = false;
   try {
     const items: MediaItem[] = [];
@@ -204,9 +206,10 @@ async function importOne(
     }
 
     const used = mediaKeysOf(parsed.data);
+    await writePost(store, parsed.data);
+    // Only after the new post JSON is saved: until then the old one still points at its media.
     const unused = (await store.list(keys.mediaPrefix(postId))).map((o) => o.key).filter((k) => !used.has(k));
     await store.deleteKeys(unused);
-    await writePost(store, parsed.data);
     done.add(postId);
     status.doneIds.push(postId);
     status.posts.done++;

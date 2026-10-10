@@ -200,6 +200,22 @@ describe('runImport', () => {
     expect(await s.exists(keys.importManifest(staged.id))).toBe(false);
   });
 
+  it('leaves an existing post and its media alone when overrides are unreadable', async () => {
+    const s = testStore('run-bad-overrides-existing');
+    const old = makePost('files_a', '2025-01-01T00:00:00.000Z');
+    old.media = [{ ...old.media[0]!, src: 'media/files_a/0/old.jpg', variants: [] } as never];
+    await s.putJson(keys.post('files_a'), old);
+    await s.put('media/files_a/0/old.jpg', 'old', 'image/jpeg');
+    await s.put(keys.overrides, '[1,2]', 'application/json');
+    const staged = await stageImport(s, { 'a.jpg': 'a' });
+    const calls: string[] = [];
+    const status = await runImport(staged.id, deps(s, { process: fakeProcess(calls) }).d);
+    expect(status).toMatchObject({ state: 'failed' });
+    expect(calls).toEqual([]);
+    expect(await s.getJson(keys.post('files_a'))).toEqual(old);
+    expect((await s.list(keys.mediaPrefix('files_a'))).map((o) => o.key)).toEqual(['media/files_a/0/old.jpg']);
+  });
+
   describe('a post that fails partway', () => {
     const gallery = {
       'g1.jpg': 'a',
