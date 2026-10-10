@@ -186,3 +186,12 @@ describe('generic read', () => {
     expect(post).toMatchObject({ platform: 'files', id: 'a' });
   });
 });
+
+describe('generic select round 2', () => {
+  it('keeps media named like denied folders, skips backslash directory entries', async () => {
+    const sel = await genericImporter.select(
+      memoryFiles({ 'profile.jpg': { size: 1 }, 'x/Profile.png': { size: 1 }, 'x/messages.json': '{}', 'x/comments.html': 'h', ['ok' + String.fromCharCode(92)]: { size: 0 }, 'z/a.jpg': { size: 1 } }),
+    );
+    expect(sel.ok && sel.files.map((f) => f.path).sort()).toEqual(['profile.jpg', 'x/Profile.png', 'z/a.jpg']);
+  });
+});

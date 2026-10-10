@@ -71,3 +71,22 @@ describe('guard hardening', () => {
     expect(isMetaExport(['connections/followers.json'])).toBe(true);
   });
 });
+
+describe('guard hardening round 2', () => {
+  it('only treats data files as denied names', () => {
+    expect(isDeniedName('profile.jpg')).toBe(false);
+    expect(isDeniedName('x/Profile.png')).toBe(false);
+    expect(isDeniedName('x/contacts.mp4')).toBe(false);
+    expect(isDeniedName('x/messages.mp4')).toBe(false);
+    expect(isDeniedName('x/messages')).toBe(true);
+    expect(isDeniedName('x/messages.json')).toBe(true);
+    expect(isDeniedName('x/comments.html')).toBe(true);
+    expect(isDeniedName('x/comments.htm')).toBe(true);
+    expect(isDeniedName('x/comments.txt')).toBe(true);
+  });
+
+  it('removes format characters before comparing segments', () => {
+    expect(isDeniedPath('messages​/a.jpg')).toBe(true);
+    expect(isDeniedPath('me­ssages/a.jpg')).toBe(true);
+  });
+});

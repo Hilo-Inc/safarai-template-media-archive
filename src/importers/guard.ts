@@ -23,8 +23,14 @@ const denied = new Set<string>(DENIED_SEGMENTS);
 function segmentsOf(path: string): string[] {
   return path
     .normalize('NFKC')
+    .replace(/\p{Cf}/gu, '')
     .split(/[\\/]/)
     .map((s) => s.trim().toLowerCase());
+}
+
+/** A directory entry: the path ends in a separator (either kind). */
+export function isDirectoryEntry(path: string): boolean {
+  return segmentsOf(path).at(-1) === '';
 }
 
 /** Every folder segment (not the file name) is checked. */
@@ -32,11 +38,14 @@ export function isDeniedPath(path: string): boolean {
   return segmentsOf(path).slice(0, -1).some((s) => denied.has(s));
 }
 
-/** True when the file's own name, extension stripped, is a denied segment (e.g. an extensionless `messages` file). */
+const DATA_EXTENSIONS = new Set(['json', 'html', 'htm', 'txt']);
+
+/** True for a data file (no extension, or .json/.html/.htm/.txt) named like a denied folder. Media such as `profile.jpg` is not affected. */
 export function isDeniedName(path: string): boolean {
   const name = segmentsOf(path).at(-1)!;
   const i = name.lastIndexOf('.');
-  return denied.has(i > 0 ? name.slice(0, i) : name);
+  if (i <= 0) return denied.has(name);
+  return DATA_EXTENSIONS.has(name.slice(i + 1)) && denied.has(name.slice(0, i));
 }
 
 const JUNK_NAMES = new Set(['.ds_store', 'thumbs.db', 'desktop.ini']);

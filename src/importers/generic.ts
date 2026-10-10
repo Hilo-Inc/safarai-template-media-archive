@@ -1,5 +1,5 @@
 import type { ArchiveConfig } from '../config/schema';
-import { isDeniedName, isDeniedPath, isJunkPath, isMetaExport, META_REFUSAL } from './guard';
+import { isDeniedName, isDirectoryEntry, isDeniedPath, isJunkPath, isMetaExport, META_REFUSAL } from './guard';
 import { baseName, extOf, hashtags, safePlatform, shortHash, slugId } from './text';
 import type { Importer, Listing, ListingEntry, RawMedia, RawPost, Selection } from './types';
 
@@ -13,7 +13,7 @@ const SUBTITLES = new Set(['srt', 'vtt']);
 
 /** Media files, plus files with no extension (their type is detected from their bytes during processing). */
 function isMediaCandidate(path: string): boolean {
-  if (baseName(path) === '' || isDeniedName(path)) return false;
+  if (isDirectoryEntry(path) || isDeniedName(path)) return false;
   const ext = extOf(path);
   return ext === '' ? !baseName(path).startsWith('.') : MEDIA.has(ext);
 }
