@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, scryptSync, timingSafeEqual } from 'node:crypto';
 import { getEnv } from '../env';
 import { shared } from './shared';
 
@@ -11,7 +11,8 @@ type Passwords = { adminPassword: string; viewerPassword: string | null };
 /** SESSION_SECRET when set; otherwise derived from both passwords, so changing a password signs everyone out. */
 export function deriveSecret(env: Passwords, explicit?: string): Buffer {
   const material = explicit || `media-archive-session\0${env.adminPassword}\0${env.viewerPassword ?? ''}`;
-  return createHash('sha256').update(material).digest();
+  // scrypt makes guessing the admin password offline from a viewer's cookie expensive.
+  return scryptSync(material, 'safarai-media-archive/session/v1', 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
 }
 
 export function sessionSecret(): Buffer {

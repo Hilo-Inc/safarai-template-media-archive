@@ -1,8 +1,15 @@
-/** The visitor's address behind Cloudflare and Coolify's proxy. Only used as a rate-limit key. */
+/**
+ * The visitor's address behind Coolify's Traefik, which appends the real peer to X-Forwarded-For.
+ * Earlier entries (and cf-connecting-ip) are client-controlled, so only the right-most entry is trusted.
+ * Only used as a rate-limit key.
+ */
 export function clientIp(headers: Headers, fallback: string | undefined): string {
-  const cf = headers.get('cf-connecting-ip')?.trim();
-  if (cf) return cf;
-  const forwarded = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  if (forwarded) return forwarded;
+  const entries = headers
+    .get('x-forwarded-for')
+    ?.split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const last = entries?.[entries.length - 1];
+  if (last) return last;
   return fallback || 'unknown';
 }

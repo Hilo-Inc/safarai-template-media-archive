@@ -5,6 +5,11 @@ export type Decision = 'allow' | 'login' | 'unauthorized' | 'forbidden';
 
 const ALWAYS = new Set(['/login', '/api/login', '/api/logout', '/healthz']);
 
+/** Collapse repeated slashes so "//admin" is judged as "/admin". */
+export function normalizePath(path: string): string {
+  return path.replace(/\/{2,}/g, '/');
+}
+
 export function isApi(path: string): boolean {
   return path === '/api' || path.startsWith('/api/');
 }

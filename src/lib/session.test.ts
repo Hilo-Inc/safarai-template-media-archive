@@ -38,3 +38,18 @@ describe('checkPassword', () => {
     expect(checkPassword('', { ...env, viewerPassword: null })).toBeNull();
   });
 });
+
+describe('key derivation', () => {
+  it('is scrypt, not a plain sha-256 of the passwords', async () => {
+    const { createHash } = await import('node:crypto');
+    const old = createHash('sha256').update(`media-archive-session\0${env.adminPassword}\0${env.viewerPassword}`).digest();
+    expect(secret.length).toBe(32);
+    expect(secret.equals(old)).toBe(false);
+  });
+  it('is deterministic and changes with the admin password, invalidating cookies', () => {
+    expect(deriveSecret(env).equals(secret)).toBe(true);
+    const other = deriveSecret({ ...env, adminPassword: 'another-admin-pw' });
+    expect(other.equals(secret)).toBe(false);
+    expect(verifySession(signSession('admin', secret, 0), other, 1)).toBeNull();
+  });
+});

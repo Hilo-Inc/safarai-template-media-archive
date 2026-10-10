@@ -22,3 +22,31 @@ describe('RateLimiter', () => {
     expect(rl.blocked('ip')).toBe(false);
   });
 });
+
+describe('RateLimiter bounds', () => {
+  it('trips a global cap regardless of key', () => {
+    const rl = new RateLimiter(10, 1000, () => 0, 3);
+    rl.fail('a');
+    rl.fail('b');
+    expect(rl.blocked('c')).toBe(false);
+    rl.fail('c');
+    expect(rl.blocked('d')).toBe(true);
+  });
+  it('clears the global cap after the window', () => {
+    let now = 0;
+    const rl = new RateLimiter(10, 1000, () => now, 2);
+    rl.fail('a');
+    rl.fail('b');
+    expect(rl.blocked('z')).toBe(true);
+    now = 1001;
+    expect(rl.blocked('z')).toBe(false);
+  });
+  it('prunes expired keys so the map stays bounded', () => {
+    let now = 0;
+    const rl = new RateLimiter(10, 1000, () => now, 1_000_000, 5);
+    for (let i = 0; i < 5; i++) rl.fail(`k${i}`);
+    now = 2000;
+    rl.fail('fresh');
+    expect(rl.size()).toBe(1);
+  });
+});

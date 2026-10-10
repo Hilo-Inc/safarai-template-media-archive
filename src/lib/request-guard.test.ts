@@ -36,3 +36,17 @@ describe('safeNext', () => {
     expect(safeNext(undefined, 'admin')).toBe('/');
   });
 });
+
+describe('safeNext open-redirect hardening', () => {
+  it('rejects control characters, whitespace and backslashes', () => {
+    for (const bad of ['/\t/evil.example', '/\n/evil.example', '/\r/evil.example', '/ /evil.example', '//evil.example', '/\\evil.example', '/\u0000x', '/\u0085/evil.example']) {
+      expect(safeNext(bad, 'admin')).toBe('/');
+    }
+  });
+  it('keeps path, query and hash', () => {
+    expect(safeNext('/p/abc?x=1#y', 'viewer')).toBe('/p/abc?x=1#y');
+  });
+  it('still keeps viewers out of admin after normalisation', () => {
+    expect(safeNext('/admin?x=1', 'viewer')).toBe('/');
+  });
+});

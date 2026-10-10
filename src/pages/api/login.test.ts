@@ -11,7 +11,7 @@ function call(body: unknown, ip = '9.9.9.9') {
   const cookies: Record<string, { value: string; opts: Record<string, unknown> }> = {};
   const request = new Request('http://a.example/api/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': `6.6.6.6, ${ip}` },
     body: JSON.stringify(body),
   });
   const ctx = {

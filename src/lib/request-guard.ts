@@ -23,9 +23,22 @@ export function guardWrite(request: Request): string | null {
   return null;
 }
 
+function unsafeChar(ch: string): boolean {
+  const code = ch.codePointAt(0)!;
+  return code <= 0x20 || (code >= 0x7f && code <= 0x9f) || ch === '\\';
+}
+
 /** Where to go after login: a same-site path; never /admin for a viewer. */
 export function safeNext(next: unknown, role: Role): string {
-  if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/';
-  if (role !== 'admin' && (next === '/admin' || next.startsWith('/admin/'))) return '/';
-  return next;
+  // Control characters, whitespace and backslashes are stripped or rewritten by browsers ("/\t/evil" becomes "//evil").
+  if (typeof next !== 'string' || !next.startsWith('/') || [...next].some(unsafeChar)) return '/';
+  let url: URL;
+  try {
+    url = new URL(next, 'http://x');
+  } catch {
+    return '/';
+  }
+  if (url.origin !== 'http://x') return '/';
+  if (role !== 'admin' && (url.pathname === '/admin' || url.pathname.startsWith('/admin/'))) return '/';
+  return url.pathname + url.search + url.hash;
 }
