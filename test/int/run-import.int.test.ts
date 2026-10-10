@@ -1,12 +1,14 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfig } from '../../src/config/load';
+import { IMPORTERS } from '../../src/importers/registry';
+import type { Importer } from '../../src/importers/types';
 import { writeManifest } from '../../src/indexer/import-files';
 import type { ItemInput, ItemResult } from '../../src/indexer/process-item';
 import { runImport } from '../../src/indexer/run-import';
-import { readStatus } from '../../src/indexer/status';
+import { readStatus, writeStatus } from '../../src/indexer/status';
 import { keys } from '../../src/lib/keys';
 import type { Store } from '../../src/lib/store';
 import type { Post } from '../../src/schema/post';
@@ -19,6 +21,12 @@ const config = resolveConfig({}, {});
 let workRoot: string;
 beforeAll(async () => {
   workRoot = await mkdtemp(join(tmpdir(), 'run-'));
+});
+beforeEach(() => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 afterAll(async () => {
   await rm(workRoot, { recursive: true, force: true });
@@ -160,5 +168,102 @@ describe('runImport', () => {
     const status = await runImport(staged.id, deps(s, { process: fakeProcess(calls) }).d);
     expect(calls).toEqual(['files_ok']);
     expect(status).toMatchObject({ state: 'done', posts: { total: 1, done: 1, failed: 0 } });
+  });
+
+  it('does not leak host paths in the error', async () => {
+    const s = testStore('run-leak');
+    const staged = await stageImport(s, { 'a.jpg': 'a' });
+    const leaky = async (): Promise<ItemResult> => {
+      throw new Error(`ENOENT: no such file or directory, stat '${workRoot}/post-x/0-src'`);
+    };
+    const status = await runImport(staged.id, deps(s, { process: leaky }).d);
+    expect(status).toMatchObject({ state: 'failed', error: 'The import stopped unexpectedly' });
+    expect(JSON.stringify(await readStatus(s, staged.id))).not.toContain('post-x');
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('ENOENT'));
+  });
+
+  it('fails an import whose overrides file is unreadable, without writing posts', async () => {
+    const s = testStore('run-bad-overrides');
+    await s.put(keys.overrides, '[1,2]', 'application/json');
+    const staged = await stageImport(s, { 'a.jpg': 'a' });
+    const status = await runImport(staged.id, deps(s, { process: fakeProcess([]) }).d);
+    expect(status).toMatchObject({ state: 'failed', error: 'The import stopped unexpectedly' });
+    expect(await s.exists(keys.post('files_a'))).toBe(false);
+  });
+
+  it('deletes the upload and manifest when the importer refuses the files', async () => {
+    const s = testStore('run-refused-cleanup');
+    const staged = await stageImport(s, { 'your_instagram_activity/media/posts_1.json': '[]', 'a.jpg': 'a' });
+    const status = await runImport(staged.id, deps(s, { process: fakeProcess([]) }).d);
+    expect(status).toMatchObject({ state: 'failed', error: expect.stringContaining('Instagram or Facebook export') });
+    expect(await s.list(keys.importPrefix(staged.id))).toEqual([]);
+    expect(await s.exists(keys.importManifest(staged.id))).toBe(false);
+  });
+
+  describe('a post that fails partway', () => {
+    const gallery = {
+      'g1.jpg': 'a',
+      'g1.jpg.json': JSON.stringify({ id: 'p1', category: 'x', num: 1 }),
+      'g2.jpg': 'b',
+      'g2.jpg.json': JSON.stringify({ id: 'p1', category: 'x', num: 2 }),
+    };
+    const failSecond =
+      (inner: ReturnType<typeof fakeProcess>) =>
+      async (input: ItemInput, s: Store): Promise<ItemResult> =>
+        input.n === 1 ? { ok: false, reason: 'Broken file' } : inner(input, s);
+
+    it('deletes the media this run uploaded for it', async () => {
+      const s = testStore('run-partial');
+      const staged = await stageImport(s, gallery);
+      const status = await runImport(staged.id, deps(s, { process: failSecond(fakeProcess([])) }).d);
+      expect(status).toMatchObject({ posts: { done: 0, failed: 1 }, failures: [{ postId: 'x_p1', reason: 'Broken file' }] });
+      expect(await s.list(keys.mediaPrefix('x_p1'))).toEqual([]);
+      expect(await s.exists(keys.post('x_p1'))).toBe(false);
+    });
+
+    it('keeps media the existing post still references', async () => {
+      const s = testStore('run-partial-keep');
+      const old = makePost('x_p1', '2025-01-01T00:00:00.000Z');
+      old.media = [{ ...old.media[0]!, src: 'media/x_p1/0/orig.jpg', variants: [] } as never];
+      await s.putJson(keys.post('x_p1'), old);
+      await s.put('media/x_p1/9/stale.jpg', 'old', 'image/jpeg');
+      const staged = await stageImport(s, gallery);
+      await runImport(staged.id, deps(s, { process: failSecond(fakeProcess([])) }).d);
+      expect((await s.list(keys.mediaPrefix('x_p1'))).map((o) => o.key)).toEqual(['media/x_p1/0/orig.jpg', 'media/x_p1/9/stale.jpg']);
+      expect(await s.getJson(keys.post('x_p1'))).toMatchObject({ id: 'x_p1' });
+    });
+  });
+
+  describe('an importer that returns an unsafe post id', () => {
+    const evil: Importer = {
+      name: 'evil',
+      label: 'evil',
+      detect: () => false,
+      select: async (l) => ({ ok: true, files: l.entries, media: l.entries.length, sidecars: 0 }),
+      read: async () => [
+        { platform: 'files', id: 'x/0', published: '2025-01-01T00:00:00.000Z', caption: '', media: [{ path: 'a.jpg' }] },
+        { platform: 'files', id: 'x/1', state: 'deleted', published: '2025-01-01T00:00:00.000Z', caption: '', media: [{ path: 'a.jpg' }] },
+      ],
+    };
+    beforeEach(() => {
+      (IMPORTERS as Importer[]).push(evil);
+    });
+    afterEach(() => {
+      (IMPORTERS as Importer[]).splice(IMPORTERS.indexOf(evil), 1);
+    });
+
+    it('fails that post before building any key or deleting anything', async () => {
+      const s = testStore('run-bad-id');
+      await s.put('media/files_x/0/canary.jpg', 'keep', 'image/jpeg');
+      await s.put('media/files_x/1/canary.jpg', 'keep', 'image/jpeg');
+      const staged = await stageImport(s, { 'a.jpg': 'a' });
+      await writeStatus(s, { ...staged, importer: 'evil' });
+      const calls: string[] = [];
+      const status = await runImport(staged.id, deps(s, { process: fakeProcess(calls) }).d);
+      expect(calls).toEqual([]);
+      expect(status).toMatchObject({ state: 'done', posts: { total: 2, failed: 2 } });
+      expect(status!.failures.map((x) => x.postId)).toEqual(['files_x/0', 'files_x/1']);
+      expect((await s.list('media/files_x/')).length).toBe(2);
+    });
   });
 });

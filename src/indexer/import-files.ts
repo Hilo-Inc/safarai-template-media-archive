@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ImportFiles, ListingEntry } from '../importers/types';
+import { ImportError } from './errors';
 import { keys } from '../lib/keys';
 import { PRIVATE_JSON } from '../lib/site';
 import type { Store } from '../lib/store';
@@ -75,7 +76,7 @@ function bucketFiles(store: Store, prefix: string, entries: ListingEntry[]): Imp
 /** The manifest's files that were uploaded completely (the stored size matches). */
 export async function uploadedImportFiles(store: Store, id: string): Promise<ImportFiles & { missing: ListingEntry[] }> {
   const manifest = await readManifest(store, id);
-  if (!manifest) throw new Error('This import has no file list');
+  if (!manifest) throw new ImportError('This import has no file list');
   const prefix = keys.importPrefix(id);
   const sizes = new Map((await store.list(prefix)).map((o) => [o.key.slice(prefix.length), o.size]));
   const present = manifest.entries.filter((e) => sizes.get(e.path) === e.size);

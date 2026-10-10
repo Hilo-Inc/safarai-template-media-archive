@@ -114,4 +114,11 @@ describe('processItem', () => {
     expect(result.ok).toBe(false);
     expect(await s.list('media/')).toEqual([]);
   });
+
+  it('fails only that item when the input file has vanished', async () => {
+    const s = testStore('item-vanished');
+    const result = await processItem({ postId: 'files_gone', n: 0, file: join(dir, 'does-not-exist'), alt: null, subtitles: [], workDir: dir }, s);
+    expect(result).toEqual({ ok: false, reason: 'The file could not be processed' });
+    expect(await s.list('media/files_gone/')).toEqual([]);
+  });
 });

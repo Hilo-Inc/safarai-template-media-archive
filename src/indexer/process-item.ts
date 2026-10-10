@@ -42,8 +42,12 @@ interface Prepared {
 const LANG_RE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 
 export async function processItem(input: ItemInput, store: Store, deps: ItemDeps = { freeBytes }): Promise<ItemResult> {
-  const { size } = await stat(input.file);
-  if ((await deps.freeBytes(input.workDir)) < 2 * size) return { ok: false, reason: DISK_MESSAGE };
+  try {
+    const { size } = await stat(input.file);
+    if ((await deps.freeBytes(input.workDir)) < 2 * size) return { ok: false, reason: DISK_MESSAGE };
+  } catch {
+    return { ok: false, reason: 'The file could not be processed' };
+  }
   const dir = await mkdtemp(join(input.workDir, `item-${input.n}-`));
   try {
     let prepared: Prepared;

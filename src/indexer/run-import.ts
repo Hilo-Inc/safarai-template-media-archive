@@ -6,7 +6,8 @@ import { hashtags } from '../importers/text';
 import type { ImportFiles, RawPost } from '../importers/types';
 import { keys } from '../lib/keys';
 import type { Store } from '../lib/store';
-import { postSchema, type MediaItem, type Post } from '../schema/post';
+import { POST_ID_RE, postSchema, type MediaItem, type Post } from '../schema/post';
+import { ImportError } from './errors';
 import { inboxImportFiles, uploadedImportFiles } from './import-files';
 import { applyLocation } from './location';
 import { writePost } from './overrides';
@@ -24,6 +25,7 @@ export interface RunDeps {
 }
 
 const STATUS_EVERY = 25;
+const GENERIC_ERROR = 'The import stopped unexpectedly';
 const KIND_OF_TYPE: Record<MediaItem['type'], Kind> = { image: 'post', video: 'video', audio: 'track' };
 
 /** Every bucket key a post points at (src, peaks, posters, variants, subtitles). */
@@ -41,6 +43,13 @@ export function mediaKeysOf(value: unknown, out = new Set<string>()): Set<string
 export async function removePost(store: Store, postId: string): Promise<void> {
   await store.deleteKeys([keys.post(postId)]);
   await store.deletePrefix(keys.mediaPrefix(postId));
+}
+
+/** Removes an upload for good: its objects, unfinished multipart uploads and the file list. */
+async function discardUpload(store: Store, id: string): Promise<void> {
+  await store.deletePrefix(keys.importPrefix(id));
+  await store.abortUploads(keys.importPrefix(id));
+  await store.deleteKeys([keys.importManifest(id)]);
 }
 
 export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus | null> {
@@ -69,9 +78,13 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     }
 
     const importer = getImporter(status.importer);
-    if (!importer) throw new Error(`Unknown importer "${status.importer}"`);
+    if (!importer) throw new ImportError(`Unknown importer "${status.importer}"`);
     const selection = await importer.select(files);
-    if (!selection.ok) throw new Error(selection.reason);
+    if (!selection.ok) {
+      // Refused (for example a Meta export): nothing from it stays in the bucket.
+      if (status.source === 'upload') await discardUpload(store, id);
+      throw new ImportError(selection.reason);
+    }
     const selected = new Set(selection.files.map((f) => f.path));
     const listing: ImportFiles = {
       entries: files.entries.filter((e) => selected.has(e.path)),
@@ -93,9 +106,7 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
 
     if (status.posts.failed === 0) {
       if (status.source === 'upload') {
-        await store.deletePrefix(keys.importPrefix(id));
-        await store.abortUploads(keys.importPrefix(id));
-        await store.deleteKeys([keys.importManifest(id)]);
+        await discardUpload(store, id);
       } else {
         await store.deleteKeys([...selected].map((p) => keys.inbox + p));
       }
@@ -103,8 +114,9 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     status.state = 'done';
   } catch (error) {
     status.state = 'failed';
-    status.error = error instanceof Error ? error.message : 'The import stopped unexpectedly';
-    console.error(`Import ${id} failed: ${status.error}`);
+    // Only our own messages reach the owner; anything else (paths, bucket errors) stays in the server log.
+    status.error = error instanceof ImportError ? error.message : GENERIC_ERROR;
+    console.error(`Import ${id} failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   status.finishedAt = now().toISOString();
   await writeStatus(store, status);
@@ -121,6 +133,10 @@ async function importOne(
 ): Promise<void> {
   const { store, config } = deps;
   const postId = `${raw.platform}_${raw.id}`;
+  if (!POST_ID_RE.test(postId) || postId.length > 120) {
+    addFailure(status, { postId, path: raw.media[0]?.path ?? null, reason: "The export's details for this post are not valid" });
+    return;
+  }
   if (raw.state || (raw.kind && !config.kinds.includes(raw.kind))) {
     status.posts.skipped++;
     await removePost(store, postId);
@@ -133,6 +149,8 @@ async function importOne(
   }
 
   const dir = await mkdtemp(join(deps.workRoot, 'post-'));
+  const before = new Set((await store.list(keys.mediaPrefix(postId))).map((o) => o.key));
+  let finished = false;
   try {
     const items: MediaItem[] = [];
     for (const [n, media] of raw.media.entries()) {
@@ -160,6 +178,7 @@ async function importOne(
     if (!config.kinds.includes(kind)) {
       status.posts.skipped++;
       await removePost(store, postId);
+      finished = true;
       return;
     }
 
@@ -191,7 +210,21 @@ async function importOne(
     done.add(postId);
     status.doneIds.push(postId);
     status.posts.done++;
+    finished = true;
   } finally {
     await rm(dir, { recursive: true, force: true });
+    if (!finished) await discardPartialMedia(store, postId, before).catch(() => undefined);
   }
+}
+
+/** A post that did not finish: delete what this run uploaded for it, unless the saved post still points at it. */
+async function discardPartialMedia(store: Store, postId: string, before: Set<string>): Promise<void> {
+  let kept = new Set<string>();
+  try {
+    kept = mediaKeysOf(await store.getJson(keys.post(postId)));
+  } catch {
+    // An unreadable saved post references nothing we can trust; fall through and delete only what this run added.
+  }
+  const added = (await store.list(keys.mediaPrefix(postId))).map((o) => o.key).filter((k) => !before.has(k) && !kept.has(k));
+  await store.deleteKeys(added);
 }

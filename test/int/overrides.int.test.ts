@@ -31,4 +31,15 @@ describe('overrides', () => {
     await Promise.all([updatePost(s, 'files_a', { hidden: true }), updatePost(s, 'files_b', { hidden: true })]);
     expect((await readOverrides(s)).hidden.sort()).toEqual(['files_a', 'files_b']);
   });
+
+  it('reads a missing file as empty but refuses one that is present and invalid', async () => {
+    const s = testStore('overrides-invalid');
+    expect(await readOverrides(s)).toEqual({ hidden: [], featured: [], edits: {} });
+    await s.put(keys.overrides, '{"hidden": "files_a"}', 'application/json');
+    await expect(readOverrides(s)).rejects.toThrow('not valid');
+    await s.putJson(keys.post('files_a'), makePost('files_a', '2025-01-01T00:00:00.000Z'));
+    await expect(updatePost(s, 'files_a', { hidden: true })).rejects.toThrow('not valid');
+    await expect(writePost(s, makePost('files_a', '2025-01-01T00:00:00.000Z'))).rejects.toThrow('not valid');
+    expect(await s.getText(keys.overrides)).toBe('{"hidden": "files_a"}');
+  });
 });

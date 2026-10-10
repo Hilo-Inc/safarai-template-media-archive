@@ -47,8 +47,12 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export async function readOverrides(store: Store): Promise<Overrides> {
-  const parsed = overridesSchema.safeParse((await store.getJson(keys.overrides)) ?? {});
-  return parsed.success ? parsed.data : overridesSchema.parse({});
+  const raw = await store.getJson(keys.overrides);
+  if (raw === null) return overridesSchema.parse({});
+  // Present but unreadable: stop. Treating it as empty would publish hidden posts and the next edit would overwrite the file.
+  const parsed = overridesSchema.safeParse(raw);
+  if (!parsed.success) throw new Error('The saved post overrides are not valid');
+  return parsed.data;
 }
 
 function withPlace(location: Post['location'], place: string | null | undefined): Post['location'] {

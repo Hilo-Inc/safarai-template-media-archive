@@ -5,3 +5,11 @@ export class MediaError extends Error {
     this.name = 'MediaError';
   }
 }
+
+/** An import-level failure whose message is safe to show the owner (no paths, no internals). Any other error is reported generically. */
+export class ImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ImportError';
+  }
+}
