@@ -1,0 +1,54 @@
+---
+import type { Visibility } from '../config/schema';
+
+interface Props {
+  title: string;
+  description?: string;
+  visibility: Visibility;
+  /** Open Graph tags; ignored in password mode. */
+  og?: { title: string; description: string; url: string | null; image: string | null } | null;
+}
+
+const { title, description, visibility, og } = Astro.props;
+const isPublic = visibility === 'public';
+---
+<!doctype html>
+<html lang="en" data-visibility={visibility}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    {!isPublic && <meta name="robots" content="noindex, nofollow" />}
+    {isPublic && <link rel="alternate" type="application/feed+json" href="/feed.json" />}
+    {isPublic && <link rel="alternate" type="application/rss+xml" href="/rss.xml" />}
+    {isPublic && og && (
+      <>
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={og.title} />
+        <meta property="og:description" content={og.description} />
+        {og.url && <meta property="og:url" content={og.url} />}
+        {og.image && <meta property="og:image" content={og.image} />}
+        <meta name="twitter:card" content={og.image ? 'summary_large_image' : 'summary'} />
+      </>
+    )}
+  </head>
+  <body>
+    <slot />
+    <script>
+      import '../client/stale';
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  :root { color-scheme: light dark; --bg: #fafafa; --fg: #111; --muted: #666; --line: #ddd; --tile: #e8e8e8; --accent: #0a66ff; --danger: #d33; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e0e0e; --fg: #eee; --muted: #999; --line: #2a2a2a; --tile: #1c1c1c; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  a { color: inherit; }
+  main { max-width: 935px; margin: 0 auto; padding: 0 0 4rem; }
+  img, video { max-width: 100%; display: block; }
+  button { font: inherit; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>

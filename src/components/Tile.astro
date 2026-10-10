@@ -1,0 +1,67 @@
+---
+import { thumbHashToAverageRGBA } from 'thumbhash';
+import { KIND_LABELS, type Look } from '../render/preset-look';
+import { firstLine } from '../render/caption';
+import { srcset } from '../render/choose-layout';
+import { formatDate, formatDuration } from '../render/format';
+import type { PostSummary } from '../schema/index-types';
+
+interface Props {
+  post: PostSummary;
+  look: Look;
+}
+
+const { post, look } = Astro.props;
+const cover = post.cover;
+const small = cover ? ([...cover.variants].sort((a, b) => a.w - b.w).find((v) => v.w >= 640) ?? cover.variants.at(-1)) : undefined;
+let placeholder = '';
+if (cover?.thumbhash) {
+  const { r, g, b } = thumbHashToAverageRGBA(Uint8Array.from(Buffer.from(cover.thumbhash, 'base64')));
+  placeholder = `background-color: rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
+}
+const label = firstLine(post.caption, 120) || KIND_LABELS[post.kind] || 'Post';
+const showDuration = look.durationBadge && post.duration !== null;
+const isPlayable = post.kind !== 'post' && post.duration !== null;
+---
+{look.tile === 'row' ? (
+  <a class="row" href={`/p/${post.id}`}>
+    {cover && <img src={small?.src ?? cover.src} alt="" width="64" height="64" loading="lazy" decoding="async" style={placeholder} />}
+    <span class="text">{label}</span>
+    <span class="meta">{formatDate(post.published)}{post.duration !== null && ` · ${formatDuration(post.duration)}`}</span>
+  </a>
+) : (
+  <a class="tile" href={`/p/${post.id}`} style={`aspect-ratio: ${look.tileAspect}`} aria-label={label}>
+    {cover ? (
+      <img
+        src={small?.src ?? cover.src}
+        srcset={cover.variants.length > 0 ? srcset(cover.variants) : undefined}
+        sizes="(max-width: 935px) 34vw, 310px"
+        alt=""
+        width={cover.width}
+        height={cover.height}
+        loading="lazy"
+        decoding="async"
+        style={placeholder}
+      />
+    ) : (
+      <span class="text">{label}</span>
+    )}
+    {post.count > 1 && <span class="badge corner" title={`${post.count} items`}><span class="visually-hidden">{post.count} items</span>▣</span>}
+    {post.count === 1 && isPlayable && !showDuration && <span class="badge corner" aria-hidden="true">▶</span>}
+    {showDuration && <span class="badge duration">{formatDuration(post.duration!)}</span>}
+    {post.featured && <span class="badge pin">Pinned</span>}
+  </a>
+)}
+
+<style>
+  .tile { position: relative; display: block; overflow: hidden; background: var(--tile); }
+  .tile img { width: 100%; height: 100%; object-fit: cover; }
+  .tile .text { position: absolute; inset: 0; display: grid; place-items: center; padding: 0.75rem; text-align: center; font-size: 0.9rem; overflow: hidden; }
+  .badge { position: absolute; color: #fff; text-shadow: 0 0 3px #0009; font-size: 0.8rem; }
+  .corner { top: 0.4rem; right: 0.5rem; }
+  .duration { bottom: 0.4rem; right: 0.4rem; background: #000b; padding: 0 0.3rem; border-radius: 0.2rem; text-shadow: none; }
+  .pin { top: 0.4rem; left: 0.5rem; }
+  .row { display: grid; grid-template-columns: 64px 1fr; gap: 0 0.75rem; padding: 0.5rem 1rem; text-decoration: none; border-bottom: 1px solid var(--line); }
+  .row img { grid-row: span 2; width: 64px; height: 64px; object-fit: cover; background: var(--tile); }
+  .row .meta { color: var(--muted); font-size: 0.85rem; }
+</style>

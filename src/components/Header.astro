@@ -1,0 +1,70 @@
+---
+import type { Role } from '../lib/session';
+import { formatCount } from '../render/format';
+import type { Chrome } from '../server/pages';
+
+interface Props {
+  chrome: Chrome;
+  /** Base path of the current grid ("/", "/kind/video", …), or null on other pages. */
+  current: string | null;
+  role: Role | null;
+}
+
+const { chrome, current, role } = Astro.props;
+const { site, avatarUrl, meta, tabs } = chrome;
+const total = meta?.counts.all ?? 0;
+---
+<header class="header">
+  <a class="identity" href="/">
+    {avatarUrl ? <img class="avatar" src={avatarUrl} alt="" width="96" height="96" /> : <span class="avatar blank" aria-hidden="true"></span>}
+    <span class="title">{site.title}</span>
+  </a>
+  <p class="count">{formatCount(total)} {total === 1 ? 'post' : 'posts'}</p>
+  {site.bio && <p class="bio">{site.bio}</p>}
+  {site.links.length > 0 && (
+    <ul class="links">
+      {site.links.map((l) => <li><a href={l.url} rel="me noopener noreferrer">{l.label}</a></li>)}
+    </ul>
+  )}
+  <div class="actions">
+    {role === 'admin' && <a href="/admin">Manage</a>}
+    {role && <button type="button" data-logout>Sign out</button>}
+  </div>
+  {tabs.length > 0 && (
+    <nav class="tabs" aria-label="Kinds">
+      <a href="/" aria-current={current === '/' ? 'page' : undefined}>All</a>
+      {tabs.map((t) => (
+        <a href={`/kind/${t.kind}`} aria-current={current === `/kind/${t.kind}` ? 'page' : undefined}>
+          {t.label} <span class="n">{formatCount(t.count)}</span>
+        </a>
+      ))}
+    </nav>
+  )}
+</header>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-logout]')) {
+    button.addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      location.assign('/');
+    });
+  }
+</script>
+
+<style>
+  .header { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; padding: 1.5rem 1rem 0; align-items: center; }
+  .identity { display: contents; text-decoration: none; }
+  .avatar { grid-row: span 2; width: 77px; height: 77px; border-radius: 50%; object-fit: cover; background: var(--tile); }
+  .title { font-size: 1.25rem; font-weight: 600; }
+  .count, .bio { margin: 0; grid-column: 2; }
+  .count { color: var(--muted); }
+  .bio { grid-column: 1 / -1; white-space: pre-line; }
+  .links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; margin: 0; padding: 0; }
+  .actions { grid-column: 1 / -1; display: flex; gap: 1rem; }
+  .actions button { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; }
+  .tabs { grid-column: 1 / -1; display: flex; justify-content: center; gap: 2rem; border-top: 1px solid var(--line); margin-top: 1rem; }
+  .tabs a { padding: 0.75rem 0; text-decoration: none; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tabs a[aria-current='page'] { color: var(--fg); border-top: 1px solid var(--fg); margin-top: -1px; }
+  .tabs .n { color: var(--muted); }
+  @media (min-width: 736px) { .avatar { width: 150px; height: 150px; } .header { padding-top: 2rem; } }
+</style>

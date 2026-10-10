@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest';
+import { resolveConfig } from '../config/load';
+import type { IndexPage } from '../schema/index-types';
+import { makePost, samplePost } from '../../test/fixtures/posts';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, ogImage, parsePage, scopeFromParam, type PageDeps } from './pages';
+
+const config = resolveConfig({}, {});
+const sign = async (src: string) => `https://media.example/${src}`;
+
+function deps(objects: Record<string, unknown>, extra: Partial<PageDeps> = {}): PageDeps {
+  return {
+    read: async <T,>(key: string) => (key in objects ? (objects[key] as T) : null),
+    sign,
+    config,
+    mediaPublicUrl: null,
+    ...extra,
+  };
+}
+
+describe('gridScope and parsePage', () => {
+  it('accepts the three scopes and refuses the rest', () => {
+    expect(gridScope('all', undefined, config)).toEqual({ scope: 'all', basePath: '/', title: null });
+    expect(gridScope('kind', 'video', config)).toEqual({ scope: 'kind/video', basePath: '/kind/video', title: 'Videos' });
+    expect(gridScope('tag', 'summer', config)).toEqual({ scope: 'tag/summer', basePath: '/tags/summer', title: '#summer' });
+    expect(gridScope('kind', 'story', config)).toBeNull();
+    expect(gridScope('kind', 'track', resolveConfig({ kinds: ['post'] }, {}))).toBeNull();
+    expect(gridScope('kind', 'nope', config)).toBeNull();
+    expect(gridScope('tag', 'a/b', config)).toBeNull();
+    expect(gridScope('tag', 'Summer', config)).toBeNull();
+  });
+
+  it('reads the fragment scope parameter', () => {
+    expect(scopeFromParam('all', config)?.scope).toBe('all');
+    expect(scopeFromParam('kind/video', config)?.scope).toBe('kind/video');
+    expect(scopeFromParam('tag/summer', config)?.scope).toBe('tag/summer');
+    expect(scopeFromParam('tag/a/b', config)).toBeNull();
+    expect(scopeFromParam('../_system', config)).toBeNull();
+    expect(scopeFromParam(null, config)).toBeNull();
+  });
+
+  it.each([
+    [null, 1],
+    ['1', 1],
+    ['12', 12],
+    ['0', null],
+    ['-1', null],
+    ['1e3', null],
+    ['x', null],
+    ['999999', null],
+  ])('page %j → %j', (raw, expected) => {
+    expect(parsePage(raw)).toBe(expected);
+  });
+});
+
+describe('loadGrid', () => {
+  const page: IndexPage = {
+    page: 1,
+    pages: 2,
+    posts: [{ id: 'files_a', kind: 'post', platform: 'files', published: '2025-01-01T00:00:00.000Z', caption: '', cover: { type: 'image', src: 'media/files_a/0/orig.jpg', width: 10, height: 10, thumbhash: null, variants: [] }, count: 1, duration: null, featured: false }],
+  };
+  const all = gridScope('all', undefined, config)!;
+
+  it('signs cover keys', async () => {
+    const out = await loadGrid(all, 1, deps({ 'index/all/0001.json': page }));
+    expect(out?.posts[0]?.cover?.src).toBe('https://media.example/media/files_a/0/orig.jpg');
+  });
+
+  it('shows an empty first page before the first build, and 404s other missing pages', async () => {
+    expect(await loadGrid(all, 1, deps({}))).toEqual({ page: 1, pages: 1, posts: [] });
+    expect(await loadGrid(all, 2, deps({}))).toBeNull();
+    expect(await loadGrid(gridScope('tag', 'summer', config)!, 1, deps({}))).toBeNull();
+  });
+});
+
+describe('loadPost', () => {
+  const hidden = makePost('files_secret', '2025-01-01T00:00:00.000Z', { hidden: true });
+  const objects = { 'posts/files_beach-day.json': samplePost, 'posts/files_secret.json': hidden, 'posts/files_bad.json': { schema: 1 } };
+
+  it('signs media keys', async () => {
+    const post = await loadPost('files_beach-day', null, deps(objects));
+    expect(post?.media[0]?.src).toBe('https://media.example/media/files_beach-day/0/orig.jpg');
+  });
+
+  it('shows hidden posts only to the owner', async () => {
+    expect(await loadPost('files_secret', null, deps(objects))).toBeNull();
+    expect(await loadPost('files_secret', 'viewer', deps(objects))).toBeNull();
+    expect((await loadPost('files_secret', 'admin', deps(objects)))?.hidden).toBe(true);
+  });
+
+  it('hides kinds the config leaves out, except from the owner', async () => {
+    const postsOnly = { ...deps(objects), config: resolveConfig({ kinds: ['video'] }, {}) };
+    expect(await loadPost('files_beach-day', null, postsOnly)).toBeNull();
+    expect(await loadPost('files_beach-day', 'admin', postsOnly)).not.toBeNull();
+  });
+
+  it('returns null for bad ids, missing and invalid posts', async () => {
+    expect(await loadPost('../_system/site', 'admin', deps(objects))).toBeNull();
+    expect(await loadPost('files_missing', 'admin', deps(objects))).toBeNull();
+    expect(await loadPost('files_bad', 'admin', deps(objects))).toBeNull();
+  });
+});
+
+describe('ogImage', () => {
+  const post = { ...samplePost, media: [{ ...samplePost.media[0]!, variants: [{ w: 640, src: 'https://media.example/w640' }, { w: 1280, src: 'https://media.example/w1280' }] }] } as typeof samplePost;
+
+  it('uses the largest variant only in public mode with a media domain', () => {
+    expect(ogImage(post, deps({}, { mediaPublicUrl: 'https://media.example' }))).toBe('https://media.example/w1280');
+    expect(ogImage(post, deps({}))).toBeNull();
+    expect(ogImage(post, deps({}, { mediaPublicUrl: 'https://media.example', config: resolveConfig({ visibility: 'password' }, {}) }))).toBeNull();
+  });
+});
+
+describe('loadChrome', () => {
+  it('falls back to the default site and signs the avatar', async () => {
+    expect((await loadChrome(deps({ '_system/site.json': { title: 5 } }))).site.title).toBe('Archive');
+    const chrome = await loadChrome(deps({ '_system/site.json': { title: 'Ours', avatar: 'media/site/avatar-x.webp' } }));
+    expect(chrome.site.title).toBe('Ours');
+    expect(chrome.avatarUrl).toBe('https://media.example/media/site/avatar-x.webp');
+    expect(chrome.look.tile).toBe('square');
+  });
+});
+
+describe('absoluteUrl', () => {
+  it('joins the configured address and a path, and is null without an address', () => {
+    expect(absoluteUrl('https://site.example/', '/p/files_a')).toBe('https://site.example/p/files_a');
+    expect(absoluteUrl(null, '/p/files_a')).toBeNull();
+  });
+});

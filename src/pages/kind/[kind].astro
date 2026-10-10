@@ -1,0 +1,24 @@
+---
+import Grid from '../../components/Grid.astro';
+import Header from '../../components/Header.astro';
+import Layout from '../../components/Layout.astro';
+import { gridScope, loadChrome, loadGrid, pageDeps, parsePage } from '../../server/pages';
+
+const deps = pageDeps();
+const role = Astro.locals.role;
+const scope = gridScope('kind', Astro.params.kind, deps.config);
+const n = parsePage(Astro.url.searchParams.get('page'));
+const [chrome, page] = await Promise.all([loadChrome(deps), scope && n ? loadGrid(scope, n, deps) : null]);
+if (!page) Astro.response.status = 404;
+const title = scope ? `${scope.title} · ${chrome.site.title}` : chrome.site.title;
+---
+<Layout title={title} visibility={deps.config.visibility} og={null}>
+  <main>
+    <Header chrome={chrome} current={scope?.basePath ?? null} role={role} />
+    {page ? <Grid page={page} scope={scope!} look={chrome.look} isOwner={role === 'admin'} /> : <p class="missing">This page doesn't exist.</p>}
+  </main>
+</Layout>
+
+<style>
+  .missing { text-align: center; padding: 4rem 1rem; color: var(--muted); }
+</style>

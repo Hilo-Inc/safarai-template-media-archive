@@ -1,0 +1,56 @@
+---
+import type { MentionsMode } from '../config/schema';
+import { captionParts } from '../render/caption';
+import { chooseLayout } from '../render/choose-layout';
+import { formatDate } from '../render/format';
+import type { Post } from '../schema/post';
+import Carousel from './Carousel.astro';
+import MediaItem from './MediaItem.astro';
+
+interface Props {
+  post: Post;
+  mentions: MentionsMode;
+}
+
+const { post, mentions } = Astro.props;
+const layout = chooseLayout(post);
+const parts = captionParts(post.caption, { platform: post.platform, mentions });
+const place = post.location && 'name' in post.location ? post.location.name : null;
+---
+<article class:list={['post', layout.kind]}>
+  <div class="media">
+    {layout.kind === 'carousel' && <Carousel items={post.media} aspect={layout.aspect} />}
+    {(layout.kind === 'image' || layout.kind === 'video' || layout.kind === 'vertical-video') && (
+      <MediaItem item={post.media[0]!} aspect={layout.aspect} eager />
+    )}
+    {(layout.kind === 'audio' || layout.kind === 'story') && post.media.map((item, i) => <MediaItem item={item} eager={i === 0} />)}
+  </div>
+  <div class="text">
+    {post.hidden && <p class="hidden-label">Hidden — only you can see this post.</p>}
+    {parts.length > 0 && (
+      <p class="caption">
+        {parts.map((part) =>
+          part.type === 'text' ? part.text : part.href ? <a href={part.href} rel={part.type === 'tag' ? undefined : 'nofollow noopener noreferrer'}>{part.text}</a> : part.text,
+        )}
+      </p>
+    )}
+    <p class="meta">
+      <time datetime={post.published}>{formatDate(post.published)}</time>
+      {place && <span> · {place}</span>}
+      {post.music && <span> · {post.music.genre}</span>}
+    </p>
+    {post.sourceUrl && <p class="source"><a href={post.sourceUrl} rel="nofollow noopener noreferrer">View the original</a></p>}
+  </div>
+</article>
+
+<style>
+  .post { display: grid; gap: 1rem; }
+  .post.vertical-video .media { max-width: 420px; margin: 0 auto; width: 100%; }
+  .post.story .media { display: grid; gap: 1rem; max-width: 420px; margin: 0 auto; }
+  .text { padding: 0 1rem; }
+  .caption { white-space: pre-line; overflow-wrap: anywhere; margin: 0 0 0.5rem; }
+  .caption a { color: var(--accent); text-decoration: none; }
+  .meta, .source { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .hidden-label { color: var(--danger); font-weight: 600; margin: 0 0 0.5rem; }
+  @media (min-width: 936px) { .post.image, .post.carousel, .post.video { grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr); align-items: start; } .text { padding: 0; } }
+</style>

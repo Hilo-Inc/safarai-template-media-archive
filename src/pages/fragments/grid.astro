@@ -1,0 +1,16 @@
+---
+import Grid from '../../components/Grid.astro';
+import { presetLook } from '../../render/preset-look';
+import { loadGrid, pageDeps, parsePage, scopeFromParam } from '../../server/pages';
+
+export const partial = true;
+
+const deps = pageDeps();
+const params = Astro.url.searchParams;
+const scope = scopeFromParam(params.get('scope'), deps.config);
+const n = parsePage(params.get('page'));
+const page = scope && n ? await loadGrid(scope, n, deps) : null;
+if (!page) return new Response('Not found', { status: 404 });
+Astro.response.headers.set('cache-control', 'private, no-store');
+---
+<Grid page={page} scope={scope!} look={presetLook(deps.config.preset)} isOwner={false} fragment />

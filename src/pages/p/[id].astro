@@ -1,0 +1,31 @@
+---
+import Header from '../../components/Header.astro';
+import Layout from '../../components/Layout.astro';
+import Post from '../../components/Post.astro';
+import { firstLine } from '../../render/caption';
+import { getEnv } from '../../env';
+import { absoluteUrl, loadChrome, loadPost, ogImage, pageDeps } from '../../server/pages';
+
+const deps = pageDeps();
+const role = Astro.locals.role;
+const [chrome, post] = await Promise.all([loadChrome(deps), loadPost(Astro.params.id ?? '', role, deps)]);
+if (!post) Astro.response.status = 404;
+const summary = post ? firstLine(post.caption, 160) : '';
+const title = summary ? `${firstLine(summary, 60)} · ${chrome.site.title}` : chrome.site.title;
+---
+<Layout
+  title={title}
+  description={summary || undefined}
+  visibility={deps.config.visibility}
+  og={post ? { title, description: summary, url: absoluteUrl(getEnv().siteUrl, Astro.url.pathname), image: ogImage(post, deps) } : null}
+>
+  <main>
+    <Header chrome={chrome} current={null} role={role} />
+    {post ? <Post post={post} mentions={deps.config.mentions} /> : <p class="missing">This post isn't here.</p>}
+  </main>
+</Layout>
+
+<style>
+  .missing { text-align: center; padding: 4rem 1rem; color: var(--muted); }
+  main :global(.post) { margin-top: 1.5rem; }
+</style>

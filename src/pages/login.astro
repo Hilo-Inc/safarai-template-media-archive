@@ -1,5 +1,9 @@
 ---
+import { readJson } from '../lib/json-cache';
+import { readSite } from '../server/pages';
+
 const next = Astro.url.searchParams.get('next') ?? '/';
+const { title } = await readSite(readJson).catch(() => ({ title: 'Archive' }));
 ---
 <!doctype html>
 <html lang="en">
@@ -7,7 +11,7 @@ const next = Astro.url.searchParams.get('next') ?? '/';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Sign in</title>
+    <title>Sign in · {title}</title>
     <style>
       :root { color-scheme: light dark; --bg: #fafafa; --fg: #111; --muted: #666; --line: #ddd; --accent: #0a66ff; }
       @media (prefers-color-scheme: dark) { :root { --bg: #0e0e0e; --fg: #eee; --muted: #999; --line: #333; } }
@@ -20,7 +24,8 @@ const next = Astro.url.searchParams.get('next') ?? '/';
   </head>
   <body>
     <form id="login" data-next={next}>
-      <h1>Sign in</h1>
+      <h1>{title}</h1>
+      <p>Sign in to continue.</p>
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required autofocus />
       <button type="submit">Sign in</button>

@@ -1,0 +1,51 @@
+---
+import type { Look } from '../render/preset-look';
+import type { IndexPage } from '../schema/index-types';
+import type { GridScope } from '../server/pages';
+import Tile from './Tile.astro';
+
+interface Props {
+  page: IndexPage;
+  scope: GridScope;
+  look: Look;
+  isOwner: boolean;
+  /** Only the tiles and the next link, for /fragments/grid. */
+  fragment?: boolean;
+}
+
+const { page, scope, look, isOwner, fragment = false } = Astro.props;
+const next = page.page < page.pages ? page.page + 1 : null;
+const desktop = look.desktopColumns
+  ? `repeat(${look.desktopColumns}, 1fr)`
+  : `repeat(auto-fill, minmax(${look.minTileWidth ?? '14rem'}, 1fr))`;
+const fragmentUrl = next ? `/fragments/grid?${new URLSearchParams({ scope: scope.scope, page: String(next) })}` : null;
+const sep = scope.basePath.includes('?') ? '&' : '?';
+---
+{fragment ? (
+  <>
+    {page.posts.map((post) => <Tile post={post} look={look} />)}
+    {next && <a class="more" data-more href={`${scope.basePath}${sep}page=${next}`} data-fragment={fragmentUrl}>More</a>}
+  </>
+) : page.posts.length === 0 && page.page === 1 ? (
+  <p class="empty">
+    Nothing here yet.
+    {isOwner && <a href="/admin">Import your files</a>}
+  </p>
+) : (
+  <section class:list={['grid', look.tile]} data-grid style={`--cols: ${look.columns}; --desktop: ${desktop}`}>
+    {page.posts.map((post) => <Tile post={post} look={look} />)}
+    {next && <a class="more" data-more href={`${scope.basePath}${sep}page=${next}`} data-fragment={fragmentUrl}>More</a>}
+  </section>
+)}
+
+<script>
+  import '../client/grid';
+</script>
+
+<style>
+  .grid { display: grid; gap: 3px; grid-template-columns: repeat(var(--cols), 1fr); }
+  .grid.row { display: block; }
+  .more { grid-column: 1 / -1; justify-self: center; padding: 1rem; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 4rem 1rem; display: grid; gap: 0.5rem; }
+  @media (min-width: 736px) { .grid:not(.row) { gap: 4px; grid-template-columns: var(--desktop); } }
+</style>
