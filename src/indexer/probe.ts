@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { fileTypeFromFile } from 'file-type';
 import sharp, { type Metadata } from 'sharp';
 import { MediaError } from './errors';
@@ -60,7 +61,8 @@ export function parseFfprobe(json: unknown): AvProbe {
   const v = streams.find((s) => s.codec_type === 'video' && !s.disposition?.attached_pic);
   const a = streams.find((s) => s.codec_type === 'audio');
   if (!v && !a) throw new MediaError('No audio or video in this file');
-  const raw = Number(v?.side_data_list?.find((d) => typeof d.rotation === 'number')?.rotation ?? v?.tags?.rotate ?? 0);
+  const parsed = Number(v?.side_data_list?.find((d) => typeof d.rotation === 'number')?.rotation ?? v?.tags?.rotate ?? 0);
+  const raw = Number.isFinite(parsed) ? parsed : 0;
   const rotation = ((((Math.round(raw / 90) * 90) % 360) + 360) % 360) as AvProbe['rotation'];
   const swap = rotation === 90 || rotation === 270;
   const w = v?.width ?? 0;
@@ -78,7 +80,7 @@ export function parseFfprobe(json: unknown): AvProbe {
 }
 
 export async function probeAv(file: string): Promise<AvProbe> {
-  const { stdout } = await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file]);
+  const { stdout } = await run('ffprobe', ['-v', 'error', '-protocol_whitelist', 'file', '-print_format', 'json', '-show_format', '-show_streams', '--', resolve(file)]);
   let json: unknown;
   try {
     json = JSON.parse(stdout);

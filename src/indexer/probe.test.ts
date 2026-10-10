@@ -25,6 +25,11 @@ describe('parseFfprobe', () => {
     expect([r.width, r.height, r.rotation]).toEqual([1920, 1080, 180]);
   });
 
+  it('treats a non-numeric rotate tag as no rotation', () => {
+    const p = parseFfprobe(video('h264', null, { tags: { rotate: 'abc' } }));
+    expect([p.width, p.height, p.rotation]).toEqual([1920, 1080, 0]);
+  });
+
   it('treats cover art in an audio file as audio', () => {
     const p = parseFfprobe({
       streams: [

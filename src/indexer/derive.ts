@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { mkdtemp, open, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join, resolve as absolute } from 'node:path';
 import sharp from 'sharp';
 import { rgbaToThumbHash } from 'thumbhash';
 import { MediaError } from './errors';
@@ -38,18 +40,23 @@ export async function thumbhashOf(file: string): Promise<string> {
 
 /** A frame at 1 s (or the first frame for short clips); ffmpeg applies rotation while decoding. */
 export async function posterFrame(video: string, outDir: string, duration: number) {
-  const png = join(outDir, 'poster-frame.png');
-  const at = duration > 2 ? '1' : '0';
-  await run('ffmpeg', ['-v', 'error', '-y', '-ss', at, '-i', video, '-frames:v', '1', png]);
-  const file = join(outDir, 'poster.webp');
-  const info = await sharp(png).webp({ quality: 80 }).toFile(file);
-  return {
-    file,
-    width: info.width,
-    height: info.height,
-    variants: await imageVariants(png, outDir, info.width, 'poster-w'),
-    thumbhash: await thumbhashOf(png),
-  };
+  const tmp = await mkdtemp(join(tmpdir(), 'poster-'));
+  try {
+    const png = join(tmp, 'frame.png');
+    const at = duration > 2 ? '1' : '0';
+    await run('ffmpeg', ['-v', 'error', '-y', '-protocol_whitelist', 'file', '-ss', at, '-i', absolute(video), '-frames:v', '1', png]);
+    const file = join(outDir, 'poster.webp');
+    const info = await sharp(png).webp({ quality: 80 }).toFile(file);
+    return {
+      file,
+      width: info.width,
+      height: info.height,
+      variants: await imageVariants(png, outDir, info.width, 'poster-w'),
+      thumbhash: await thumbhashOf(png),
+    };
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 }
 
 export function reducePeaks(values: number[], count = PEAK_COUNT): number[] {
@@ -72,9 +79,10 @@ const PEAK_RATE = 8000;
 
 /** Decodes to 8 kHz mono float samples on a pipe and keeps the loudest sample of each small block. */
 export function audioPeaks(file: string, duration: number): Promise<number[]> {
-  const block = Math.max(1, Math.floor((duration * PEAK_RATE) / (PEAK_COUNT * 4)));
+  // With an unknown duration, assume blocks of 400 samples (20 per second) rather than one entry per sample.
+  const block = duration > 0 && Number.isFinite(duration) ? Math.max(1, Math.floor((duration * PEAK_RATE) / (PEAK_COUNT * 4))) : 400;
   return new Promise((resolve, reject) => {
-    const ff = spawn('ffmpeg', ['-v', 'error', '-i', file, '-ac', '1', '-ar', String(PEAK_RATE), '-f', 'f32le', '-'], {
+    const ff = spawn('ffmpeg', ['-v', 'error', '-protocol_whitelist', 'file', '-i', absolute(file), '-ac', '1', '-ar', String(PEAK_RATE), '-f', 'f32le', '-'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const blocks: number[] = [];
@@ -98,14 +106,25 @@ export function audioPeaks(file: string, duration: number): Promise<number[]> {
     ff.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
     ff.on('error', () => reject(new MediaError('ffmpeg is not available')));
     ff.on('close', (code) => {
-      if (code !== 0) return reject(new MediaError(`ffmpeg could not decode the audio: ${stderr.trim().split('\n').at(-1) ?? ''}`));
+      if (code !== 0) return reject(new MediaError(`ffmpeg could not decode the audio: ${stderr.trim().split('\n').at(-1)?.split(absolute(file)).join(basename(file)).slice(0, 200) ?? ''}`));
       if (inBlock) blocks.push(current);
       resolve(reducePeaks(blocks));
     });
   });
 }
 
-/** .srt or .vtt in, WebVTT out. */
+/** .srt or .vtt in, WebVTT out. The input format is forced: WebVTT if the file starts with the WEBVTT signature, otherwise SRT. */
 export async function toVtt(src: string, dest: string): Promise<void> {
-  await run('ffmpeg', ['-v', 'error', '-y', '-i', src, '-f', 'webvtt', dest]);
+  const from = absolute(src);
+  const fh = await open(from, 'r').catch(() => {
+    throw new MediaError('The subtitle file could not be read');
+  });
+  const head = Buffer.alloc(8);
+  try {
+    await fh.read(head, 0, 8, 0);
+  } finally {
+    await fh.close();
+  }
+  const format = head.toString('utf8').replace(/^\uFEFF/, '').startsWith('WEBVTT') ? 'webvtt' : 'srt';
+  await run('ffmpeg', ['-v', 'error', '-y', '-protocol_whitelist', 'file', '-f', format, '-i', from, '-f', 'webvtt', absolute(dest)]);
 }
