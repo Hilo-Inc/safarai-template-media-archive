@@ -15,6 +15,9 @@ export const keys = {
   importPrefix: (id: string) => `imports/${id}/`,
   importStatus: (id: string) => `_system/imports/${id}.json`,
   importStatusPrefix: '_system/imports/',
+  /** The files the browser said it would upload for one import (written by POST /api/imports). */
+  importManifest: (id: string) => `_system/manifests/${id}.json`,
+  manifestPrefix: '_system/manifests/',
   overrides: '_system/overrides.json',
   site: '_system/site.json',
   adminIndex: '_system/admin-index.json',
