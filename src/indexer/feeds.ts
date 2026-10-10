@@ -14,6 +14,13 @@ function titleOf(post: Post): string {
   return chars.length <= TITLE_LENGTH ? line : `${chars.slice(0, TITLE_LENGTH - 1).join('')}…`;
 }
 
+const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+/** A caption as safe HTML: every markup character escaped, line breaks kept. */
+function captionHtml(caption: string): string {
+  return `<p>${caption.replace(/[&<>"']/g, (c) => ENTITIES[c]!).replace(/\r?\n/g, '<br>')}</p>`;
+}
+
 /** The largest variant up to 1280 px wide, else the smallest, else the cover itself. */
 function coverKey(cover: Cover): string {
   return cover.variants.filter((v) => v.w <= 1280).at(-1)?.src ?? cover.variants[0]?.src ?? cover.src;
@@ -22,7 +29,7 @@ function coverKey(cover: Cover): string {
 export function buildFeeds(
   posts: Post[],
   site: Site,
-  opts: { siteUrl: string; mediaPublicUrl: string | null; now: Date },
+  opts: { siteUrl: string; mediaPublicUrl: string | null; kinds: readonly string[]; now: Date },
 ): { json: string; rss: string } {
   const base = opts.siteUrl.replace(/\/+$/, '');
   const mediaBase = opts.mediaPublicUrl?.replace(/\/+$/, '') ?? null;
@@ -36,7 +43,8 @@ export function buildFeeds(
     generator: 'Media Archive',
     feedLinks: { json: `${base}/feed.json`, rss: `${base}/rss.xml` },
   });
-  const latest = [...posts].sort((a, b) => Date.parse(b.published) - Date.parse(a.published)).slice(0, FEED_SIZE);
+  const shown = posts.filter((p) => !p.hidden && p.kind !== 'story' && opts.kinds.includes(p.kind));
+  const latest = shown.sort((a, b) => Date.parse(b.published) - Date.parse(a.published)).slice(0, FEED_SIZE);
   for (const post of latest) {
     const url = `${base}/p/${encodeURIComponent(post.id)}`;
     const cover = summarize(post).cover;
@@ -45,7 +53,8 @@ export function buildFeeds(
       id: url,
       link: url,
       date: new Date(post.published),
-      description: post.caption || undefined,
+      description: post.caption ? captionHtml(post.caption) : undefined,
+      content: post.caption ? captionHtml(post.caption) : undefined,
       image: cover && mediaBase ? `${mediaBase}/${encodeKey(coverKey(cover))}` : undefined,
     });
   }

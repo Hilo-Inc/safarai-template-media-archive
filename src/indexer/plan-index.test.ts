@@ -104,4 +104,11 @@ describe('planIndex', () => {
     expect(meta.pages).toEqual({ all: 1, files: 1, youtube: 1, 'kind/post': 1, 'kind/video': 1, 'tag/sun': 1, 'tag/beach': 1 });
     expect([...plan.keys()].some((k) => k.includes('has space') || k.includes('a/b'))).toBe(false);
   });
+
+  it('keeps reserved platform names out of the platform counts', () => {
+    const plan = planIndex([makePost('files_a', day(1)), makePost('tag_b', day(2))], config, now);
+    const meta = plan.get(keys.indexMeta) as IndexMeta;
+    expect(meta.platforms).toEqual(['files']);
+    expect(meta.counts.platforms).toEqual({ files: 1 });
+  });
 });

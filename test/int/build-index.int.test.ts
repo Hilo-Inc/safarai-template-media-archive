@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveConfig } from '../../src/config/load';
 import { buildIndex } from '../../src/indexer/build-index';
 import { keys } from '../../src/lib/keys';
@@ -43,5 +43,15 @@ describe('buildIndex', () => {
     const noAddress = await buildIndex(s, config, { siteUrl: null, mediaPublicUrl: null, now });
     expect(noAddress.feeds).toBe(false);
     expect(await s.exists(keys.feedJson)).toBe(false);
+  });
+
+  it('skips a post that is not JSON but lets store errors stop the build', async () => {
+    const s = testStore('build-notjson');
+    await s.put(keys.post('files_junk'), 'not json', 'application/json');
+    const result = await buildIndex(s, config, { siteUrl: null, mediaPublicUrl: null, now });
+    expect(result.skipped).toEqual(['posts/files_junk.json']);
+
+    vi.spyOn(s, 'getJson').mockRejectedValue(new Error('store down'));
+    await expect(buildIndex(s, config, { siteUrl: null, mediaPublicUrl: null, now })).rejects.toThrow('store down');
   });
 });

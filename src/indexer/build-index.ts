@@ -28,8 +28,9 @@ export async function buildIndex(store: Store, config: ArchiveConfig, opts: Buil
   const loaded = await mapLimit(listed, 16, async (o) => {
     try {
       return { key: o.key, parsed: postSchema.safeParse(await store.getJson(o.key)) };
-    } catch {
-      // Not even JSON: skip it like any other invalid post.
+    } catch (error) {
+      // Not even JSON: skip it like any other invalid post. Store errors still stop the build.
+      if (!(error instanceof SyntaxError)) throw error;
       return { key: o.key, parsed: null };
     }
   });
@@ -47,8 +48,12 @@ export async function buildIndex(store: Store, config: ArchiveConfig, opts: Buil
 
   const feeds = config.visibility === 'public' && opts.siteUrl !== null;
   if (feeds) {
-    const visible = posts.filter((p) => !p.hidden && p.kind !== 'story' && config.kinds.includes(p.kind));
-    const { json, rss } = buildFeeds(visible, await loadSite(store), { siteUrl: opts.siteUrl!, mediaPublicUrl: opts.mediaPublicUrl, now });
+    const { json, rss } = buildFeeds(posts, await loadSite(store), {
+      siteUrl: opts.siteUrl!,
+      mediaPublicUrl: opts.mediaPublicUrl,
+      kinds: config.kinds,
+      now,
+    });
     await store.put(keys.feedJson, json, 'application/feed+json', CACHE_JSON);
     await store.put(keys.rss, rss, 'application/rss+xml', CACHE_JSON);
   } else {

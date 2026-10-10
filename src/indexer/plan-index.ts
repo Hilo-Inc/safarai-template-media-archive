@@ -7,9 +7,11 @@ import type { Post } from '../schema/post';
 /** Tags that get a page: letters, digits, `_` and `-` only, so a tag is always one key segment. */
 export const TAG_RE = /^[\p{L}\p{N}_-]{1,100}$/u;
 
+/** Ordinal comparison, so ordering never depends on ICU or locale. */
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const time = (p: Post) => Date.parse(p.published);
-const newestFirst = (a: Post, b: Post) => time(b) - time(a) || a.id.localeCompare(b.id);
-const oldestFirst = (a: Post, b: Post) => time(a) - time(b) || a.id.localeCompare(b.id);
+const newestFirst = (a: Post, b: Post) => time(b) - time(a) || cmp(a.id, b.id);
+const oldestFirst = (a: Post, b: Post) => time(a) - time(b) || cmp(a.id, b.id);
 const featuredFirst = (list: Post[]) => [...list.filter((p) => p.featured), ...list.filter((p) => !p.featured)];
 
 function tally(values: string[]): Map<string, number> {
@@ -19,7 +21,7 @@ function tally(values: string[]): Map<string, number> {
 }
 
 function mostUsed(counts: Map<string, number>): string[] {
-  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+  return [...counts].sort((a, b) => b[1] - a[1] || cmp(a[0], b[0])).map(([k]) => k);
 }
 
 const tagsOf = (p: Post) => [...new Set(p.tags)].filter((t) => TAG_RE.test(t));
@@ -78,7 +80,7 @@ export function planIndex(posts: Post[], config: ArchiveConfig, now: Date): Map<
     visibility: config.visibility,
     counts: {
       all: grid.length,
-      platforms: Object.fromEntries(platformCounts),
+      platforms: Object.fromEntries(platforms.map((p) => [p, platformCounts.get(p)!])),
       kinds: Object.fromEntries(tally(visible.map((p) => p.kind))),
     },
     platforms,
