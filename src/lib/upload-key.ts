@@ -1,15 +1,13 @@
+import { isNormalPath } from '../indexer/import-files';
 import { isDeniedPath } from '../importers/guard';
 import { keys } from './keys';
 
 export const MAX_PATH_LENGTH = 900;
-// Control characters and backslashes: never part of a path the browser listing produces.
-// eslint-disable-next-line no-control-regex
-const BAD_CHARS = /[\u0000-\u001f\u007f\\]/;
 
 /** Why a relative import path is unacceptable, or null when it is fine. */
 export function importPathProblem(path: string): string | null {
-  if (path.length === 0 || path.length > MAX_PATH_LENGTH || BAD_CHARS.test(path)) return 'Bad file path';
-  if (path.split('/').some((s) => s === '' || s === '.' || s === '..')) return 'Bad file path';
+  // isNormalPath: relative, forward slashes, no empty/./.. segments, no control characters.
+  if (path.length > MAX_PATH_LENGTH || !isNormalPath(path)) return 'Bad file path';
   if (isDeniedPath(path)) return 'This folder is never uploaded';
   return null;
 }

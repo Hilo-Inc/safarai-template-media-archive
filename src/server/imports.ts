@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isNormalPath, readManifest, writeManifest } from '../indexer/import-files';
+import { readManifest, writeManifest } from '../indexer/import-files';
 import type { ImportQueue } from '../indexer/queue';
 import { IMPORT_ID_RE, listStatuses, newImportId, newStatus, readStatus, writeStatus, type ImportStatus } from '../indexer/status';
 import { getImporter } from '../importers/registry';
@@ -45,8 +45,7 @@ export async function createImport(store: Store, body: unknown, now = new Date()
   const { importer: name, entries } = parsed.data;
   const seen = new Set<string>();
   for (const e of entries) {
-    // The runner silently drops manifest entries that are not normal paths, so refuse them here instead.
-    if (!isNormalPath(e.path)) return fail(400, 'Bad file path');
+    // importPathProblem includes isNormalPath, which the runner uses to drop entries silently; refuse them here instead.
     const problem = importPathProblem(e.path);
     if (problem && problem !== 'This folder is never uploaded') return fail(400, `${problem}: ${e.path}`);
     if (seen.has(e.path)) return fail(400, `Listed twice: ${e.path}`);

@@ -14,7 +14,8 @@ export async function patchPost(store: Store, queue: QueueLike, id: string, body
     return json(200, { post });
   } catch (error) {
     if (error instanceof OverrideError) return fail(error.status, error.message);
-    // e.g. unreadable overrides: log nothing sensitive, tell the owner generically.
+    // e.g. unreadable overrides: log the reason for the operator, tell the owner generically.
+    console.error('patchPost failed:', error instanceof Error ? `${error.name}: ${error.message}` : 'unknown');
     return fail(500, 'Could not save the change');
   }
 }
