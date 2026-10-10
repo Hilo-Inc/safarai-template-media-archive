@@ -61,6 +61,20 @@ describe('generic select', () => {
   });
 });
 
+describe('generic select hardening', () => {
+  it('skips backslash-denied paths, directories and denied-name files', async () => {
+    const sel = await genericImporter.select(
+      memoryFiles({ 'messages\\photos\\a.jpg': { size: 1 }, 'ok/': { size: 0 }, 'x/messages': { size: 1 }, 'raw/IMG_0001': { size: 1 }, './messages/b.jpg': { size: 1 } }),
+    );
+    expect(sel.ok && sel.files.map((f) => f.path)).toEqual(['raw/IMG_0001']);
+  });
+
+  it('refuses a backslash Meta export', async () => {
+    const r = await genericImporter.select(memoryFiles({ 'your_instagram_activity\\media\\x.jpg': { size: 1 } }));
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe('generic read', () => {
   it('reads a yt-dlp video with its info JSON and subtitles', async () => {
     const info = {

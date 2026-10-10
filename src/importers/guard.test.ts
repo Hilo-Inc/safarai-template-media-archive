@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDeniedPath, isJunkPath, isMetaExport } from './guard';
+import { isDeniedName, isDeniedPath, isJunkPath, isMetaExport } from './guard';
 
 describe('isDeniedPath', () => {
   it('denies private folders at any depth, any case', () => {
@@ -32,5 +32,42 @@ describe('isMetaExport', () => {
     expect(isMetaExport(['content/posts_1.json', 'media/posts/a.jpg'])).toBe(true);
     expect(isMetaExport(['messages/inbox/friend_1/message_1.json'])).toBe(true);
     expect(isMetaExport(['videos/a.mp4', 'videos/a.info.json'])).toBe(false);
+  });
+});
+
+describe('guard hardening', () => {
+  it('handles backslashes, case, whitespace, full-width and dot segments', () => {
+    for (const p of [
+      'messages\\photos\\a.jpg',
+      'Messages /a.jpg',
+      'ｍｅｓｓａｇｅｓ/a.jpg',
+      './messages/a.jpg',
+      'ok/../messages/a.jpg',
+      'MESSAGES/inbox/x',
+      'x/profile/a.jpg',
+      'followers_and_following/a.json',
+      'login_and_account_creation/a.json',
+      'account_information/a.json',
+    ]) expect(isDeniedPath(p), p).toBe(true);
+    expect(isDeniedPath('ok/a.jpg')).toBe(false);
+  });
+
+  it('denies files named like a denied folder', () => {
+    expect(isDeniedName('x/messages')).toBe(true);
+    expect(isDeniedName('x/Comments.json')).toBe(true);
+    expect(isDeniedName('raw/IMG_0001')).toBe(false);
+  });
+
+  it('matches __MACOSX case-insensitively and with backslashes', () => {
+    expect(isJunkPath('__macosx/a.mp4')).toBe(true);
+    expect(isJunkPath('a\\__MACOSX\\a.mp4')).toBe(true);
+  });
+
+  it('recognises backslash and older flat Meta layouts', () => {
+    expect(isMetaExport(['your_instagram_activity\\media\\x.jpg'])).toBe(true);
+    expect(isMetaExport(['profile.json'])).toBe(true);
+    expect(isMetaExport(['export/profile.json'])).toBe(true);
+    expect(isMetaExport(['a/b/profile.json'])).toBe(false);
+    expect(isMetaExport(['connections/followers.json'])).toBe(true);
   });
 });
