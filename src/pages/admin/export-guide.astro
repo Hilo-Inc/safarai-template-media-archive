@@ -1,11 +1,14 @@
 ---
 import AdminLayout from '../../components/AdminLayout.astro';
+import { mediaExtensionText } from '../../server/admin';
+
+const ext = mediaExtensionText();
 ---
 <AdminLayout title="Export guide" current="/admin/export-guide">
   <p>The importer reads photos, videos and audio, and the caption files that some download tools save next to them. Drop zips or folders on the Import page; everything else stays on your computer.</p>
 
   <h2>Plain files</h2>
-  <p>Photos (JPEG, PNG, WebP, HEIC, GIF), videos (MP4, MOV, WebM, MKV) and audio (MP3, M4A, WAV, FLAC, OGG). Each file becomes one post, dated by the file's date. You can add captions afterwards on the Posts page.</p>
+  <p>Photos ({ext.image}), videos ({ext.video}) and audio ({ext.audio}). Each file becomes one post, dated by the file's date. You can add captions afterwards on the Posts page.</p>
 
   <h2>Videos and music saved with yt-dlp</h2>
   <p>Run yt-dlp with <code>--write-info-json</code> (and <code>--write-subs</code> for subtitles). The title, description, tags, upload date and original link come from the <code>.info.json</code> file next to each video, and <code>.vtt</code> or <code>.srt</code> files become subtitles.</p>

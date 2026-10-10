@@ -3,6 +3,7 @@ import { keys } from '../lib/keys';
 import { shared } from '../lib/shared';
 import { PRIVATE_JSON } from '../lib/site';
 import type { Store } from '../lib/store';
+import { ALT_MAX, CAPTION_MAX, PLACE_MAX } from '../schema/patch-limits';
 import { postSchema, type Post } from '../schema/post';
 
 export const MAX_FEATURED = 3;
@@ -10,11 +11,11 @@ export const MAX_FEATURED = 3;
 export const postPatchSchema = z.strictObject({
   hidden: z.boolean().optional(),
   featured: z.boolean().optional(),
-  caption: z.string().max(5000).optional(),
+  caption: z.string().max(CAPTION_MAX).optional(),
   /** Alt text by media item index ("0", "1", …); null clears it. */
-  alt: z.record(z.string().regex(/^\d{1,3}$/), z.string().trim().max(1000).nullable()).optional(),
+  alt: z.record(z.string().regex(/^\d{1,3}$/), z.string().trim().max(ALT_MAX).nullable()).optional(),
   /** Place name; null or "" removes it (coordinates, if any, stay). */
-  place: z.string().trim().max(200).nullable().optional(),
+  place: z.string().trim().max(PLACE_MAX).nullable().optional(),
 });
 export type PostPatch = z.infer<typeof postPatchSchema>;
 

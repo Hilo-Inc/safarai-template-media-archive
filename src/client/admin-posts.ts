@@ -1,5 +1,6 @@
 import type { Post } from '../schema/post';
-import { filterPosts, type PostFilter } from './admin-view';
+import { ALT_MAX, CAPTION_MAX, PLACE_MAX } from '../schema/patch-limits';
+import { filterPosts, SavedValue, type PostFilter } from './admin-view';
 import { api } from './upload';
 
 type Row = { id: string; caption: string; hidden: boolean; featured: boolean };
@@ -40,18 +41,17 @@ for (const box of list.querySelectorAll<HTMLInputElement>('input[type="checkbox"
   });
 }
 
-function textField(label: string, value: string, multiline: boolean, onSave: (value: string, el: HTMLElement, revert: () => void) => void): HTMLLabelElement {
+function textField(label: string, value: string, multiline: boolean, maxLength: number, onSave: (value: string, el: HTMLElement, revert: () => void) => void): HTMLLabelElement {
   const wrap = document.createElement('label');
   wrap.style.display = 'grid';
   wrap.append(label);
   const input = multiline ? document.createElement('textarea') : document.createElement('input');
   input.value = value;
-  let saved = value;
+  input.maxLength = maxLength;
+  const saved = new SavedValue(value);
   input.addEventListener('blur', () => {
-    if (input.value === saved) return;
-    const next = input.value;
-    onSave(next, input, () => (input.value = saved));
-    saved = next;
+    const attempt = saved.begin(input.value);
+    if (attempt) onSave(attempt.next, input, () => (input.value = attempt.revert()));
   });
   wrap.append(input);
   return wrap;
@@ -74,14 +74,19 @@ for (const button of list.querySelectorAll<HTMLButtonElement>('[data-edit]')) {
     fields.style.display = 'grid';
     fields.style.gap = '0.4rem';
     fields.append(
-      textField('Caption', post.caption, true, (caption, el, revert) => void save(li, el, { caption }, revert)),
-      textField('Place', post.location && 'name' in post.location ? (post.location.name ?? '') : '', false, (place, el, revert) =>
+      textField('Caption', post.caption, true, CAPTION_MAX, (caption, el, revert) => {
+        // The search filter looks at captions, so keep its copy current.
+        void save(li, el, { caption }, revert).then((saved) => {
+          if (saved) byId.get(li.dataset.id!)!.caption = caption;
+        });
+      }),
+      textField('Place', post.location && 'name' in post.location ? (post.location.name ?? '') : '', false, PLACE_MAX, (place, el, revert) =>
         void save(li, el, { place: place.trim() || null }, revert),
       ),
     );
     post.media.forEach((item, i) => {
       if (item.type !== 'image') return;
-      fields.append(textField(`Alt text, image ${i + 1}`, item.alt ?? '', false, (alt, el, revert) => void save(li, el, { alt: { [String(i)]: alt.trim() || null } }, revert)));
+      fields.append(textField(`Alt text, image ${i + 1}`, item.alt ?? '', false, ALT_MAX, (alt, el, revert) => void save(li, el, { alt: { [String(i)]: alt.trim() || null } }, revert)));
     });
     button.replaceWith(fields);
   });

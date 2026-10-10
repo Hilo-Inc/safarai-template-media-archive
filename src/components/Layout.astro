@@ -5,9 +5,9 @@ interface Props {
   title: string;
   description?: string;
   visibility: Visibility;
-  /** Open Graph tags; ignored in password mode. */
   /** Admin pages: noindex, no feed or Open Graph tags. */
   admin?: boolean;
+  /** Open Graph tags; ignored in password mode. */
   og?: { title: string; description: string; url: string | null; image: string | null } | null;
 }
 

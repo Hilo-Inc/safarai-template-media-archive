@@ -1,3 +1,4 @@
+import { MEDIA_EXTENSIONS } from '../importers/generic';
 import type { ArchiveConfig } from '../config/schema';
 import type { ServerEnv } from '../env';
 import { siteUrl } from '../lib/site';
@@ -17,4 +18,10 @@ export function feedNotice(config: Pick<ArchiveConfig, 'visibility'>, env: Pick<
   if (config.visibility === 'password') return 'Feeds are off while the site needs a password.';
   if (siteUrl(env, site)) return null;
   return "The RSS and JSON feeds need the site's address. Set SITE_URL in the deployment (Coolify sets COOLIFY_URL itself), then restart.";
+}
+
+/** The accepted file extensions per kind for the export guide, taken from the importer so the two cannot drift. */
+export function mediaExtensionText(): Record<keyof typeof MEDIA_EXTENSIONS, string> {
+  const text = (list: string[]) => list.map((e) => e.toUpperCase()).join(', ');
+  return { image: text(MEDIA_EXTENSIONS.image), video: text(MEDIA_EXTENSIONS.video), audio: text(MEDIA_EXTENSIONS.audio) };
 }

@@ -13,6 +13,7 @@ const progressBox = $('[data-progress]');
 const bar = $<HTMLProgressElement>('[data-bar]');
 const progressText = $('[data-progress-text]');
 const list = $('[data-imports]');
+const stopButton = $<HTMLButtonElement>('[data-stop]');
 
 let busy = false;
 /** Set when "Resume upload" asked for files again: the import they belong to. */
@@ -53,9 +54,16 @@ async function handleFiles(files: File[]): Promise<void> {
   planError.textContent = '';
   planText.textContent = 'Reading the file list…';
   planBox.hidden = false;
+  progressBox.hidden = true; // a finished or stopped upload's bar and Stop button
   $<HTMLButtonElement>('[data-upload]').disabled = true;
   try {
     const { sources, duplicates } = await listFilesNamingZip(files);
+    if (pending) {
+      // A new selection replaces the earlier one; that import has no uploads yet, so remove it instead of leaving it in `uploading`.
+      const old = pending;
+      pending = null;
+      await api('DELETE', `/api/imports/${old.id}`, {}).catch(() => undefined);
+    }
     if (resumeId) return await resume(resumeId, sources);
     const created = await api<{ id: string; files: ListingEntry[] }>('POST', '/api/imports', { importer: 'generic', entries: toEntries(sources) });
     pending = { id: created.id, files: created.files, sources };
@@ -89,6 +97,7 @@ for (const input of document.querySelectorAll<HTMLInputElement>('[data-pick-file
 
 async function upload(id: string, todo: Source[], alreadyBytes: number): Promise<void> {
   busy = true;
+  stopButton.disabled = false;
   controller = new AbortController();
   planBox.hidden = true;
   progressBox.hidden = false;
@@ -116,6 +125,7 @@ async function upload(id: string, todo: Source[], alreadyBytes: number): Promise
     progressText.textContent = (error as Error).message;
   } finally {
     busy = false;
+    stopButton.disabled = true;
     controller = null;
     pending = null;
     void refresh();
@@ -224,7 +234,15 @@ async function act(action: ImportAction, id: string, button: HTMLButtonElement):
 }
 
 let timer: number | undefined;
+let refreshing = false;
+let refreshAgain = false;
 async function refresh(): Promise<void> {
+  // One request and one timer at a time: a call during a poll is folded into one more refresh afterwards.
+  if (refreshing) {
+    refreshAgain = true;
+    return;
+  }
+  refreshing = true;
   window.clearTimeout(timer);
   let active = false;
   try {
@@ -233,6 +251,11 @@ async function refresh(): Promise<void> {
     list.replaceChildren(...(imports.length > 0 ? imports.map(row) : [Object.assign(document.createElement('li'), { className: 'hint', textContent: 'No imports yet.' })]));
   } catch (error) {
     list.replaceChildren(Object.assign(document.createElement('li'), { className: 'error', textContent: (error as Error).message }));
+  }
+  refreshing = false;
+  if (refreshAgain) {
+    refreshAgain = false;
+    return refresh();
   }
   timer = window.setTimeout(() => void refresh(), active ? 3000 : 30000);
 }

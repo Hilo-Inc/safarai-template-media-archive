@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminSummary } from '../schema/index-types';
-import { cleanLinks, filterPosts, importActions, importLabel, selectionSummary, type ImportView } from './admin-view';
+import { cleanLinks, SavedValue, filterPosts, importActions, importLabel, selectionSummary, type ImportView } from './admin-view';
 
 const status = (extra: Partial<ImportView> = {}): ImportView => ({
   id: 'lx0abc12-0a1b2c',
@@ -93,5 +93,33 @@ describe('cleanLinks', () => {
     expect(cleanLinks([{ label: 'x', url: 'javascript:alert(1)' }])).toEqual({ ok: false, error: 'Links must start with http:// or https://: x' });
     expect(cleanLinks([{ label: 'x', url: '' }])).toEqual({ ok: false, error: 'Each link needs a label and an address: x' });
     expect(cleanLinks([{ label: '', url: 'https://a.example' }])).toEqual({ ok: false, error: 'Each link needs a label and an address: https://a.example' });
+  });
+});
+
+describe('SavedValue', () => {
+  it('does nothing when the value did not change', () => {
+    expect(new SavedValue('a').begin('a')).toBeNull();
+  });
+
+  it('a failed save restores the previous value and the next blur retries', () => {
+    const saved = new SavedValue('old');
+    const attempt = saved.begin('new')!;
+    expect(attempt.next).toBe('new');
+    expect(attempt.revert()).toBe('old');
+    // The input shows "old" again; typing "new" again is a change again.
+    expect(saved.begin('new')).not.toBeNull();
+  });
+
+  it('keeps the new value after a successful save', () => {
+    const saved = new SavedValue('old');
+    saved.begin('new');
+    expect(saved.begin('new')).toBeNull();
+  });
+
+  it('a late revert does not undo a newer save', () => {
+    const saved = new SavedValue('a');
+    const first = saved.begin('b')!;
+    saved.begin('c');
+    expect(first.revert()).toBe('c');
   });
 });

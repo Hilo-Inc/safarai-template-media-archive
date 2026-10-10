@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SITE } from '../schema/site';
-import { feedNotice, loadAdminPosts } from './admin';
+import { feedNotice, loadAdminPosts, mediaExtensionText } from './admin';
 
 const sign = async (src: string) => `https://signed.example/${src}`;
 
@@ -26,5 +26,16 @@ describe('feedNotice', () => {
     expect(feedNotice({ visibility: 'public' }, { siteUrl: null }, { ...DEFAULT_SITE, lastOrigin: 'https://a.example' })).toBeNull();
     expect(feedNotice({ visibility: 'public' }, { siteUrl: null }, DEFAULT_SITE)).toMatch(/SITE_URL/);
     expect(feedNotice({ visibility: 'password' }, { siteUrl: 'https://a.example' }, DEFAULT_SITE)).toMatch(/password/);
+  });
+});
+
+describe('mediaExtensionText', () => {
+  it('lists exactly the extensions the importer accepts', async () => {
+    const { MEDIA_EXTENSIONS } = await import('../importers/generic');
+    const text = mediaExtensionText();
+    for (const kind of ['image', 'video', 'audio'] as const) {
+      expect(text[kind].toLowerCase().split(', ').sort()).toEqual([...MEDIA_EXTENSIONS[kind]].sort());
+    }
+    expect(text.image).not.toMatch(/HEIC/);
   });
 });
