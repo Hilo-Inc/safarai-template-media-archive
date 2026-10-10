@@ -52,8 +52,10 @@ describe('imports API', () => {
     const s = testStore('api-create-bad');
     expect((await createImport(s, { entries: [entry('../a.jpg')] })).status).toBe(400);
     expect((await createImport(s, { entries: [entry('a.jpg'), entry('a.jpg')] })).status).toBe(400);
-    for (const bad of ['/abs.jpg', 'a//b.jpg', 'a\b.jpg', 'a\u0000.jpg', 'a/./b.jpg', 'a/', 'x/../../y.jpg']) {
-      expect((await createImport(s, { entries: [entry(bad)] })).status).toBe(400);
+    for (const bad of ['/abs.jpg', 'a//b.jpg', 'a\\b.jpg', 'a\u0000.jpg', 'a/./b.jpg', 'a/', 'x/../../y.jpg']) {
+      const res = await createImport(s, { entries: [entry(bad)] });
+      expect(res.status).toBe(400);
+      expect((await body(res)).error).toContain(bad);
     }
     expect((await createImport(s, { importer: 'nope', entries: [entry('a.jpg')] })).status).toBe(400);
     const meta = await createImport(s, { entries: [entry('your_instagram_activity/media/posts_1.json'), entry('media/a.jpg')] });
