@@ -105,7 +105,6 @@ describe('imports API', () => {
     expect(res.status).toBe(202);
     expect(queue.enqueue).toHaveBeenCalledWith(id);
     expect(await readStatus(s, id)).toMatchObject({ state: 'queued' });
-    expect((await loadSite(s)).lastOrigin).toBeNull();
     expect((await startImport(s, queue, id)).status).toBe(409);
   });
 

@@ -22,8 +22,19 @@ export function pageDeps(): PageDeps {
   return { read: readJson, sign: defaultSigner(), config: loadConfig(), mediaPublicUrl: getEnv().mediaPublicUrl };
 }
 
+/** Bucket JSON, or null when the file is missing or not valid JSON (a hand edit): pages degrade instead of failing. Store errors still throw. */
+async function readOrNull<T>(read: PageDeps['read'], key: string): Promise<T | null> {
+  try {
+    return await read<T>(key);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    console.warn(`${key} is not valid JSON`);
+    return null;
+  }
+}
+
 export async function readSite(read: PageDeps['read']): Promise<Site> {
-  const parsed = siteSchema.safeParse((await read(keys.site)) ?? {});
+  const parsed = siteSchema.safeParse((await readOrNull(read, keys.site)) ?? {});
   return parsed.success ? parsed.data : DEFAULT_SITE;
 }
 
@@ -36,7 +47,7 @@ export interface Chrome {
 }
 
 export async function loadChrome(deps: PageDeps): Promise<Chrome> {
-  const [site, meta] = await Promise.all([readSite(deps.read), deps.read<IndexMeta>(keys.indexMeta)]);
+  const [site, meta] = await Promise.all([readSite(deps.read), readOrNull<IndexMeta>(deps.read, keys.indexMeta)]);
   return {
     site,
     avatarUrl: site.avatar ? await deps.sign(site.avatar) : null,
@@ -78,14 +89,14 @@ export function parsePage(raw: string | null): number | null {
 }
 
 export async function loadGrid(scope: GridScope, page: number, deps: PageDeps): Promise<IndexPage | null> {
-  const data = await deps.read<IndexPage>(keys.indexPage(scope.scope, page));
+  const data = await readOrNull<IndexPage>(deps.read, keys.indexPage(scope.scope, page));
   if (!data) return scope.scope === 'all' && page === 1 ? { page: 1, pages: 1, posts: [] } : null;
   return signJsonPaths(data, deps.sign);
 }
 
 export async function loadPost(id: string, role: Role | null, deps: PageDeps): Promise<Post | null> {
   if (!POST_ID_RE.test(id) || id.length > 120) return null;
-  const parsed = postSchema.safeParse(await deps.read(keys.post(id)));
+  const parsed = postSchema.safeParse(await readOrNull(deps.read, keys.post(id)));
   if (!parsed.success) return null;
   const post = parsed.data;
   if (role !== 'admin' && (post.hidden || !deps.config.kinds.includes(post.kind))) return null;

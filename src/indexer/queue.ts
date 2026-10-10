@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { loadConfig } from '../config/load';
 import { getEnv } from '../env';
 import { shared } from '../lib/shared';
-import { loadSite, siteUrl } from '../lib/site';
 import { store } from '../lib/store';
 import { buildIndex } from './build-index';
 import { runImport } from './run-import';
@@ -79,7 +78,7 @@ export class ImportQueue {
 export async function rebuild(): Promise<unknown> {
   const s = store();
   const env = getEnv();
-  return buildIndex(s, loadConfig(), { siteUrl: siteUrl(env, await loadSite(s)), mediaPublicUrl: env.mediaPublicUrl });
+  return buildIndex(s, loadConfig(), { siteUrl: env.siteUrl, mediaPublicUrl: env.mediaPublicUrl });
 }
 
 export function getQueue(): ImportQueue {

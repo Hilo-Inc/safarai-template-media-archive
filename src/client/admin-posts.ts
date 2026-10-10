@@ -16,12 +16,13 @@ const byId = new Map(rows.map((r) => [r.id, r]));
 const count = document.querySelector<HTMLElement>('[data-count]')!;
 
 /** Saves one field. Marks the element while saving; on failure shows the error and calls `revert`. */
-async function save(li: HTMLElement, el: HTMLElement, patch: Record<string, unknown>, revert: () => void): Promise<Post | null> {
+async function save(li: HTMLElement, el: HTMLElement, patch: Record<string, unknown>, revert: () => void, confirm: () => void = () => undefined): Promise<Post | null> {
   const error = li.querySelector<HTMLElement>('[data-error]')!;
   error.textContent = '';
   el.classList.add('saving');
   try {
     const { post } = await api<{ post: Post }>('PATCH', `/api/posts/${encodeURIComponent(li.dataset.id!)}`, patch);
+    confirm();
     return post;
   } catch (e) {
     revert();
@@ -41,7 +42,7 @@ for (const box of list.querySelectorAll<HTMLInputElement>('input[type="checkbox"
   });
 }
 
-function textField(label: string, value: string, multiline: boolean, maxLength: number, onSave: (value: string, el: HTMLElement, revert: () => void) => void): HTMLLabelElement {
+function textField(label: string, value: string, multiline: boolean, maxLength: number, onSave: (value: string, el: HTMLElement, revert: () => void, confirm: () => void) => void): HTMLLabelElement {
   const wrap = document.createElement('label');
   wrap.style.display = 'grid';
   wrap.append(label);
@@ -51,7 +52,13 @@ function textField(label: string, value: string, multiline: boolean, maxLength: 
   const saved = new SavedValue(value);
   input.addEventListener('blur', () => {
     const attempt = saved.begin(input.value);
-    if (attempt) onSave(attempt.next, input, () => (input.value = attempt.revert()));
+    if (!attempt) return;
+    const revert = () => {
+      const kept = attempt.revert();
+      // Only put the saved text back if the user has not typed something else since.
+      if (input.value === attempt.next) input.value = kept;
+    };
+    onSave(attempt.next, input, revert, attempt.confirm);
   });
   wrap.append(input);
   return wrap;
@@ -74,19 +81,19 @@ for (const button of list.querySelectorAll<HTMLButtonElement>('[data-edit]')) {
     fields.style.display = 'grid';
     fields.style.gap = '0.4rem';
     fields.append(
-      textField('Caption', post.caption, true, CAPTION_MAX, (caption, el, revert) => {
+      textField('Caption', post.caption, true, CAPTION_MAX, (caption, el, revert, confirm) => {
         // The search filter looks at captions, so keep its copy current.
-        void save(li, el, { caption }, revert).then((saved) => {
+        void save(li, el, { caption }, revert, confirm).then((saved) => {
           if (saved) byId.get(li.dataset.id!)!.caption = caption;
         });
       }),
-      textField('Place', post.location && 'name' in post.location ? (post.location.name ?? '') : '', false, PLACE_MAX, (place, el, revert) =>
-        void save(li, el, { place: place.trim() || null }, revert),
+      textField('Place', post.location && 'name' in post.location ? (post.location.name ?? '') : '', false, PLACE_MAX, (place, el, revert, confirm) =>
+        void save(li, el, { place: place.trim() || null }, revert, confirm),
       ),
     );
     post.media.forEach((item, i) => {
       if (item.type !== 'image') return;
-      fields.append(textField(`Alt text, image ${i + 1}`, item.alt ?? '', false, ALT_MAX, (alt, el, revert) => void save(li, el, { alt: { [String(i)]: alt.trim() || null } }, revert)));
+      fields.append(textField(`Alt text, image ${i + 1}`, item.alt ?? '', false, ALT_MAX, (alt, el, revert, confirm) => void save(li, el, { alt: { [String(i)]: alt.trim() || null } }, revert, confirm)));
     });
     button.replaceWith(fields);
   });

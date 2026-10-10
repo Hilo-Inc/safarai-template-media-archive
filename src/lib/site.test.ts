@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SITE } from '../schema/site';
-import { loadSite, siteUrl } from './site';
+import { loadSite } from './site';
 import type { Store } from './store';
 
 const fakeStore = (value: unknown) => ({ getJson: async () => value }) as unknown as Store;
@@ -12,10 +12,9 @@ describe('site', () => {
     expect(await loadSite(fakeStore({ title: 42 }))).toEqual(DEFAULT_SITE);
   });
 
-  it('prefers the configured site address over the last admin origin', () => {
-    const site = { ...DEFAULT_SITE, lastOrigin: 'https://seen.example' };
-    expect(siteUrl({ siteUrl: 'https://set.example' }, site)).toBe('https://set.example');
-    expect(siteUrl({ siteUrl: null }, site)).toBe('https://seen.example');
-    expect(siteUrl({ siteUrl: null }, DEFAULT_SITE)).toBeNull();
+  it('still reads old files that recorded lastOrigin', async () => {
+    const old = await loadSite(fakeStore({ ...DEFAULT_SITE, title: 'Old', lastOrigin: 'https://seen.example' }));
+    expect(old.title).toBe('Old');
+    expect(old).not.toHaveProperty('lastOrigin');
   });
 });

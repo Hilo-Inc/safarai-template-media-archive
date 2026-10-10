@@ -10,7 +10,7 @@ import { POST_ID_RE, postSchema, type MediaItem, type Post } from '../schema/pos
 import { ImportError } from './errors';
 import { inboxImportFiles, uploadedImportFiles } from './import-files';
 import { applyLocation } from './location';
-import { readOverrides, writePost } from './overrides';
+import { readOverrides, serial, writePost } from './overrides';
 import { processItem, type ItemResult } from './process-item';
 import { addFailure, readStatus, writeStatus, type ImportStatus } from './status';
 
@@ -40,9 +40,12 @@ export function mediaKeysOf(value: unknown, out = new Set<string>()): Set<string
   return out;
 }
 
-export async function removePost(store: Store, postId: string): Promise<void> {
-  await store.deleteKeys([keys.post(postId)]);
-  await store.deletePrefix(keys.mediaPrefix(postId));
+/** Under the overrides lock, so an admin edit that already read the post cannot write it back after its media is gone. */
+export function removePost(store: Store, postId: string): Promise<void> {
+  return serial(async () => {
+    await store.deleteKeys([keys.post(postId)]);
+    await store.deletePrefix(keys.mediaPrefix(postId));
+  });
 }
 
 /** Removes an upload for good: its objects, unfinished multipart uploads and the file list. */

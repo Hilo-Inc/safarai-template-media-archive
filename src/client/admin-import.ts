@@ -62,7 +62,8 @@ async function handleFiles(files: File[]): Promise<void> {
       // A new selection replaces the earlier one; that import has no uploads yet, so remove it instead of leaving it in `uploading`.
       const old = pending;
       pending = null;
-      await api('DELETE', `/api/imports/${old.id}`, {}).catch(() => undefined);
+      // The import being resumed must stay: it is the one that continues below.
+      if (old.id !== resumeId) await api('DELETE', `/api/imports/${old.id}`, {}).catch(() => undefined);
     }
     if (resumeId) return await resume(resumeId, sources);
     const created = await api<{ id: string; files: ListingEntry[] }>('POST', '/api/imports', { importer: 'generic', entries: toEntries(sources) });

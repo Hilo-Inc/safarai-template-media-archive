@@ -123,3 +123,21 @@ describe('SavedValue', () => {
     expect(first.revert()).toBe('c');
   });
 });
+
+describe('SavedValue overlapping failures', () => {
+  it('two failed saves return the last confirmed value, never one that was not saved', () => {
+    const saved = new SavedValue('a');
+    const b = saved.begin('b')!;
+    const c = saved.begin('c')!;
+    expect(b.revert()).toBe('c'); // a newer attempt is in flight
+    expect(c.revert()).toBe('a');
+  });
+
+  it('reverts to the last value the server confirmed', () => {
+    const saved = new SavedValue('a');
+    const b = saved.begin('b')!;
+    b.confirm();
+    const c = saved.begin('c')!;
+    expect(c.revert()).toBe('b');
+  });
+});

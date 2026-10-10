@@ -2,11 +2,9 @@
 import AdminLayout from '../../components/AdminLayout.astro';
 import { loadConfig } from '../../config/load';
 import { getEnv } from '../../env';
-import { readJson } from '../../lib/json-cache';
 import { feedNotice } from '../../server/admin';
-import { readSite } from '../../server/pages';
 
-const notice = feedNotice(loadConfig(), getEnv(), await readSite(readJson));
+const notice = feedNotice(loadConfig(), getEnv());
 ---
 <AdminLayout title="Import" current="/admin">
   {notice && <p class="notice">{notice}</p>}

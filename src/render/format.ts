@@ -11,7 +11,8 @@ export function formatDuration(seconds: number): string {
 }
 
 export function formatDate(iso: string): string {
-  return DATE.format(new Date(iso));
+  const time = Date.parse(iso);
+  return Number.isNaN(time) ? '' : DATE.format(time);
 }
 
 export function formatCount(n: number): string {

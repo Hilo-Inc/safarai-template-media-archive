@@ -40,7 +40,7 @@ export class OverrideError extends Error {
 }
 
 /** Runs fn after every earlier call has finished, so read-modify-write of overrides and posts never interleave. */
-function serial<T>(fn: () => Promise<T>): Promise<T> {
+export function serial<T>(fn: () => Promise<T>): Promise<T> {
   const lock = shared('overrides-lock', () => ({ tail: Promise.resolve() as Promise<unknown> }));
   const run = lock.tail.then(fn, fn);
   lock.tail = run.catch(() => undefined);

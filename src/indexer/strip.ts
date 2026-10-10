@@ -32,8 +32,8 @@ export async function stripImage(src: string, dest: string): Promise<void> {
   try {
     const ft = await fileTypeFromFile(from);
     if (ft?.mime === 'image/tiff') {
-      // .rotate() bakes the EXIF orientation into the pixels; sharp writes no other metadata except the ICC profile.
-      await sharp(from).rotate().keepIccProfile().tiff().toFile(to);
+      // .rotate() bakes the EXIF orientation into the pixels; sharp writes no other metadata except the ICC profile. LZW is lossless, so the original stays an original.
+      await sharp(from).rotate().keepIccProfile().tiff({ compression: 'lzw' }).toFile(to);
     } else {
       await copyFile(from, to);
       await run('exiftool', ['-q', '-overwrite_original', '-all=', '-tagsfromfile', '@', '-Orientation', '-ICC_Profile', '--', to]);

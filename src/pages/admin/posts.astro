@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../components/AdminLayout.astro';
 import { formatDate } from '../../render/format';
-import { loadAdminPosts } from '../../server/admin';
+import { HIDDEN_NOTICE, loadAdminPosts } from '../../server/admin';
 import { pageDeps } from '../../server/pages';
 
 const index = await loadAdminPosts(pageDeps());
@@ -9,6 +9,7 @@ const thumb = (p: (typeof index.posts)[number]) =>
   p.cover ? ([...p.cover.variants].sort((a, b) => a.w - b.w).find((v) => v.w >= 320)?.src ?? p.cover.src) : null;
 ---
 <AdminLayout title="Posts" current="/admin/posts">
+  <p class="hint">{HIDDEN_NOTICE}</p>
   <form class="filter" data-filter>
     <input type="search" name="text" placeholder="Search captions" aria-label="Search captions" />
     <select name="show" aria-label="Show">
@@ -26,7 +27,7 @@ const thumb = (p: (typeof index.posts)[number]) =>
         <a href={`/p/${p.id}`} class="thumb">{thumb(p) ? <img src={thumb(p)} alt="" width="96" height="96" loading="lazy" /> : <span>{p.kind}</span>}</a>
         <div class="fields">
           <p class="meta">{formatDate(p.published)} · {p.kind} · {p.platform}{p.count > 1 && ` · ${p.count} items`}</p>
-          <label><input type="checkbox" data-field="hidden" checked={p.hidden} /> Hidden</label>
+          <label title={HIDDEN_NOTICE}><input type="checkbox" data-field="hidden" checked={p.hidden} /> Hidden</label>
           <label><input type="checkbox" data-field="featured" checked={p.featured} /> Featured</label>
           <button type="button" data-edit>Edit caption, alt text and place</button>
           <p class="error" data-error></p>

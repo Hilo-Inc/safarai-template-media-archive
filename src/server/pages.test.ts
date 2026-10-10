@@ -126,3 +126,34 @@ describe('absoluteUrl', () => {
     expect(absoluteUrl(null, '/p/files_a')).toBeNull();
   });
 });
+
+describe('corrupt bucket JSON', () => {
+  const corrupt = (bad: string[]): PageDeps =>
+    deps({ 'posts/files_beach-day.json': samplePost }, {
+      read: async <T,>(key: string) => {
+        if (bad.includes(key)) throw new SyntaxError('Unexpected token');
+        return key === 'posts/files_beach-day.json' ? (samplePost as T) : null;
+      },
+    });
+
+  it('falls back to the default site and an empty chrome', async () => {
+    const chrome = await loadChrome(corrupt(['_system/site.json', 'index/meta.json']));
+    expect(chrome.site.title).toBe('Archive');
+    expect(chrome.meta).toBeNull();
+  });
+
+  it('shows an empty grid or a missing page, not an error', async () => {
+    const all = gridScope('all', undefined, config)!;
+    expect(await loadGrid(all, 1, corrupt(['index/all/0001.json']))).toEqual({ page: 1, pages: 1, posts: [] });
+    expect(await loadGrid(all, 2, corrupt(['index/all/0002.json']))).toBeNull();
+  });
+
+  it('treats a post that is not JSON as missing', async () => {
+    expect(await loadPost('files_beach-day', 'admin', corrupt(['posts/files_beach-day.json']))).toBeNull();
+  });
+
+  it('still lets store errors through', async () => {
+    const broken = deps({}, { read: async () => { throw new Error('connect ECONNREFUSED'); } });
+    await expect(loadChrome(broken)).rejects.toThrow('ECONNREFUSED');
+  });
+});

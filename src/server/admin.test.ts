@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SITE } from '../schema/site';
-import { feedNotice, loadAdminPosts, mediaExtensionText } from './admin';
+import { feedNotice, HIDDEN_NOTICE, loadAdminPosts, mediaExtensionText } from './admin';
 
 const sign = async (src: string) => `https://signed.example/${src}`;
 
@@ -22,10 +21,9 @@ describe('loadAdminPosts', () => {
 
 describe('feedNotice', () => {
   it('explains missing feeds', () => {
-    expect(feedNotice({ visibility: 'public' }, { siteUrl: 'https://a.example' }, DEFAULT_SITE)).toBeNull();
-    expect(feedNotice({ visibility: 'public' }, { siteUrl: null }, { ...DEFAULT_SITE, lastOrigin: 'https://a.example' })).toBeNull();
-    expect(feedNotice({ visibility: 'public' }, { siteUrl: null }, DEFAULT_SITE)).toMatch(/SITE_URL/);
-    expect(feedNotice({ visibility: 'password' }, { siteUrl: 'https://a.example' }, DEFAULT_SITE)).toMatch(/password/);
+    expect(feedNotice({ visibility: 'public' }, { siteUrl: 'https://a.example' })).toBeNull();
+    expect(feedNotice({ visibility: 'public' }, { siteUrl: null })).toMatch(/SITE_URL/);
+    expect(feedNotice({ visibility: 'password' }, { siteUrl: 'https://a.example' })).toMatch(/password/);
   });
 });
 
@@ -37,5 +35,12 @@ describe('mediaExtensionText', () => {
       expect(text[kind].toLowerCase().split(', ').sort()).toEqual([...MEDIA_EXTENSIONS[kind]].sort());
     }
     expect(text.image).not.toMatch(/HEIC/);
+  });
+});
+
+describe('HIDDEN_NOTICE', () => {
+  it('says that hidden files stay reachable by address on a public archive', () => {
+    expect(HIDDEN_NOTICE).toMatch(/stay reachable/);
+    expect(HIDDEN_NOTICE).not.toMatch(/unguessable/i);
   });
 });

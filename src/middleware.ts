@@ -34,11 +34,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (decision === 'login') return lock(context.redirect(`/login?next=${encodeURIComponent(context.url.pathname + search)}`, 303));
 
   const response = await next();
-  if (mode === 'password') {
-    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
-    if (!response.headers.has('cache-control')) response.headers.set('Cache-Control', 'private, no-store');
-  }
-  if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/login') {
+  if (mode === 'password') response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  // Everything a signed-in admin sees, and everything in password mode, is private whatever the route set (the schema route says
+  // "public"; an admin sees hidden posts that a shared cache must never keep). Public assets are the only exception.
+  const isAsset = pathname.startsWith('/_astro/');
+  if (!isAsset && (mode === 'password' || role === 'admin' || pathname === '/login' || pathname === '/admin' || pathname.startsWith('/admin/'))) {
     response.headers.set('Cache-Control', 'private, no-store');
   }
   return response;

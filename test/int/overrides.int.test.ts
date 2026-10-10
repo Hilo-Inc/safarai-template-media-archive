@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { keys } from '../../src/lib/keys';
 import { readOverrides, updatePost, writePost } from '../../src/indexer/overrides';
+import { removePost } from '../../src/indexer/run-import';
 import type { Post } from '../../src/schema/post';
 import { makePost } from '../fixtures/posts';
 import { testStore } from '../helpers/s3';
@@ -41,5 +42,24 @@ describe('overrides', () => {
     await expect(updatePost(s, 'files_a', { hidden: true })).rejects.toThrow('not valid');
     await expect(writePost(s, makePost('files_a', '2025-01-01T00:00:00.000Z'))).rejects.toThrow('not valid');
     expect(await s.getText(keys.overrides)).toBe('{"hidden": "files_a"}');
+  });
+  it('a post removed by an import is not written back by an edit already in flight', async () => {
+    const s = testStore('overrides-remove');
+    await s.putJson(keys.post('files_a'), makePost('files_a', '2025-01-01T00:00:00.000Z'));
+    // Hold the edit's write of the post until the removal has been requested.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = Object.create(s) as typeof s;
+    slow.putJson = async (key, value, cache) => {
+      if (key === keys.post('files_a')) await gate;
+      return s.putJson(key, value, cache);
+    };
+    const edit = updatePost(slow, 'files_a', { caption: 'late edit' });
+    await new Promise((r) => setTimeout(r, 200));
+    const removal = removePost(s, 'files_a');
+    await new Promise((r) => setTimeout(r, 200));
+    release();
+    await Promise.all([edit.catch(() => undefined), removal]);
+    expect(await s.getJson(keys.post('files_a'))).toBeNull();
   });
 });

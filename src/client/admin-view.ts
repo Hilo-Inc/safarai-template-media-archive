@@ -80,18 +80,26 @@ export function cleanLinks(rows: LinkRow[]): { ok: true; links: LinkRow[] } | { 
   return { ok: true, links };
 }
 
-/** The last value the server has for a text field. A blur that changes it starts a save; a failed save puts the previous value back, so the next blur tries again. */
+/**
+ * The value of a text field as saved. A blur that changes it starts a save; `confirm` records that the server has it,
+ * and a failed save's `revert` returns the last confirmed value (never one that was not saved), so the next blur tries again.
+ */
 export class SavedValue {
-  constructor(private value: string) {}
+  private confirmed: string;
+  constructor(private value: string) {
+    this.confirmed = value;
+  }
 
-  begin(current: string): { next: string; revert(): string } | null {
+  begin(current: string): { next: string; confirm(): void; revert(): string } | null {
     if (current === this.value) return null;
-    const prev = this.value;
     this.value = current;
     return {
       next: current,
+      confirm: () => {
+        this.confirmed = current;
+      },
       revert: () => {
-        if (this.value === current) this.value = prev;
+        if (this.value === current) this.value = this.confirmed;
         return this.value;
       },
     };

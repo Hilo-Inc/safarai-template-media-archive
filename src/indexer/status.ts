@@ -58,9 +58,25 @@ export function addFailure(status: ImportStatus, failure: ImportFailure): void {
   if (status.failures.length < MAX_FAILURES) status.failures.push(failure);
 }
 
+/** What a status file that cannot be parsed shows as: a failed import the admin can remove. */
+function unreadable(id: string): ImportStatus {
+  return { ...newStatus({ id, importer: 'generic', source: 'upload', files: 0, bytes: 0, state: 'failed' }, new Date(0)), error: 'Status file unreadable' };
+}
+
+async function readOne(store: Store, key: string, id: string): Promise<ImportStatus | null> {
+  try {
+    return await store.getJson<ImportStatus>(key);
+  } catch (error) {
+    // Not even JSON (a hand edit or an interrupted tool). Store errors still propagate.
+    if (!(error instanceof SyntaxError)) throw error;
+    console.warn(`Import status ${key} is not valid JSON`);
+    return unreadable(id);
+  }
+}
+
 export async function readStatus(store: Store, id: string): Promise<ImportStatus | null> {
   if (!IMPORT_ID_RE.test(id)) return null;
-  return store.getJson<ImportStatus>(keys.importStatus(id));
+  return readOne(store, keys.importStatus(id), id);
 }
 
 export async function writeStatus(store: Store, status: ImportStatus): Promise<void> {
@@ -69,6 +85,9 @@ export async function writeStatus(store: Store, status: ImportStatus): Promise<v
 
 export async function listStatuses(store: Store): Promise<ImportStatus[]> {
   const listed = (await store.list(keys.importStatusPrefix)).filter((o) => o.key.endsWith('.json'));
-  const all = await mapLimit(listed, 8, (o) => store.getJson<ImportStatus>(o.key));
+  const all = await mapLimit(listed, 8, (o) => {
+    const id = o.key.slice(keys.importStatusPrefix.length, -'.json'.length);
+    return IMPORT_ID_RE.test(id) ? readOne(store, o.key, id) : Promise.resolve(null);
+  });
   return all.filter((s): s is ImportStatus => s !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
 }

@@ -12,6 +12,11 @@ describe('format', () => {
     expect(formatDate('2025-02-10T23:30:00.000Z')).toBe('10 Feb 2025');
   });
 
+  it('writes nothing for a date that does not parse, instead of throwing', () => {
+    expect(formatDate('not a date')).toBe('');
+    expect(formatDate('')).toBe('');
+  });
+
   it('groups thousands', () => {
     expect(formatCount(4880)).toBe('4,880');
   });

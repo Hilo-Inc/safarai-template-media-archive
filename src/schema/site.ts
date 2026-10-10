@@ -13,8 +13,6 @@ export const siteSchema = z.object({
   links: siteInputSchema.shape.links.default([]),
   /** Bucket key of the avatar image (media/site/avatar-<version>.webp), or null. */
   avatar: z.string().nullable().default(null),
-  /** Origin of the last admin request; used for feed links when SITE_URL and COOLIFY_URL are unset. */
-  lastOrigin: z.string().nullable().default(null),
 });
 
 export type Site = z.infer<typeof siteSchema>;

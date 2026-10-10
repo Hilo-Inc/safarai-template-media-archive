@@ -2,7 +2,8 @@
 import Grid from '../../components/Grid.astro';
 import Header from '../../components/Header.astro';
 import Layout from '../../components/Layout.astro';
-import { gridScope, loadChrome, loadGrid, pageDeps, parsePage } from '../../server/pages';
+import { getEnv } from '../../env';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, pageDeps, parsePage } from '../../server/pages';
 
 const deps = pageDeps();
 const role = Astro.locals.role;
@@ -12,7 +13,12 @@ const [chrome, page] = await Promise.all([loadChrome(deps), scope && n ? loadGri
 if (!page) Astro.response.status = 404;
 const title = scope ? `${scope.title} · ${chrome.site.title}` : chrome.site.title;
 ---
-<Layout title={title} visibility={deps.config.visibility} og={null}>
+<Layout
+  title={title}
+  visibility={deps.config.visibility}
+  description={chrome.site.bio || undefined}
+  og={{ title, description: chrome.site.bio, url: absoluteUrl(getEnv().siteUrl, Astro.url.pathname), image: deps.config.visibility === 'public' && deps.mediaPublicUrl ? chrome.avatarUrl : null }}
+>
   <main>
     <Header chrome={chrome} current={scope?.basePath ?? null} role={role} />
     {page ? <Grid page={page} scope={scope!} look={chrome.look} isOwner={role === 'admin'} /> : <p class="missing">This page doesn't exist.</p>}

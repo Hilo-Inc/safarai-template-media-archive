@@ -166,6 +166,8 @@ describe('image stripping hardening', () => {
         expect(after).not.toContain(needle);
       }
       expect((await sharp(dest).metadata()).width).toBe(64);
+      // TIFF is re-encoded losslessly: LZW (TIFF compression 5), not sharp's lossy JPEG default.
+      if (fmt === 'tiff') expect((await exif(dest)).Compression).toBe(5);
     });
   }
 
