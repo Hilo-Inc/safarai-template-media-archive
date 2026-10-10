@@ -1,0 +1,15 @@
+services:
+  s3:
+    image: adobe/s3mock:5.2
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: archive-test
+  test:
+    build: { context: ., target: test }
+    depends_on: [s3]
+    environment:
+      S3_ENDPOINT: http://s3:9090
+      S3_REGION: us-east-1
+      S3_BUCKET: archive-test
+      S3_ACCESS_KEY_ID: test
+      S3_SECRET_ACCESS_KEY: test
+      S3_FORCE_PATH_STYLE: "1"

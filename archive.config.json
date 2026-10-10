@@ -1,0 +1,7 @@
+{
+  "preset": "generic",
+  "visibility": "public",
+  "exclude": ["archived", "deleted", "draft"],
+  "location": "none",
+  "mentions": "text"
+}
