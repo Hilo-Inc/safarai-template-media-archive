@@ -14,7 +14,8 @@
     "test:int": "docker compose run --rm --build test",
     "test:int:inner": "vitest run --config vitest.int.config.ts",
     "typecheck": "astro check",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "sample-export": "esbuild scripts/sample-export.ts --bundle --platform=node --format=esm --target=node22 --packages=external --log-level=warning --outfile=.cache/sample-export.mjs && node .cache/sample-export.mjs"
   },
   "dependencies": {
     "@astrojs/node": "11.1.7",
