@@ -5,6 +5,9 @@ export const POST_ID_RE = /^[a-z0-9-]+_[A-Za-z0-9._-]+$/;
 export const ORIENTATIONS = ['portrait', 'square', 'landscape'] as const;
 export type Orientation = (typeof ORIENTATIONS)[number];
 
+/** An absolute http(s) URL; rejects javascript:, data: and other schemes. */
+export const httpUrl = z.url({ protocol: /^https?$/ });
+
 const key = z.string().min(1).max(1024);
 const dimension = z.number().int().positive();
 
@@ -65,7 +68,7 @@ export const postSchema = z.strictObject({
   importedAt: z.iso.datetime(),
   caption: z.string(),
   tags: z.array(z.string()),
-  sourceUrl: z.url().nullable(),
+  sourceUrl: httpUrl.nullable(),
   location: locationSchema,
   music: z.strictObject({ genre: z.string() }).nullable(),
   hidden: z.boolean(),

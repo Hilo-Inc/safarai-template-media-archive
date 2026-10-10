@@ -38,6 +38,12 @@ describe('postSchema', () => {
     expect(() => postSchema.parse({ ...samplePost, device_id: 'abc' })).toThrow();
   });
 
+  it('accepts only http(s) source URLs', () => {
+    expect(() => postSchema.parse({ ...samplePost, sourceUrl: 'javascript:alert(1)' })).toThrow();
+    expect(() => postSchema.parse({ ...samplePost, sourceUrl: 'data:text/html,<script>1</script>' })).toThrow();
+    expect(postSchema.parse({ ...samplePost, sourceUrl: 'https://example.com/p/1' }).sourceUrl).toBe('https://example.com/p/1');
+  });
+
   it('exports a JSON Schema', () => {
     const schema = postJsonSchema() as { type: string; required: string[] };
     expect(schema.type).toBe('object');

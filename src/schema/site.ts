@@ -1,6 +1,5 @@
 import { z } from 'zod';
-
-const httpUrl = z.url({ protocol: /^https?$/ });
+import { httpUrl } from './post';
 
 export const siteInputSchema = z.strictObject({
   title: z.string().trim().max(80),
