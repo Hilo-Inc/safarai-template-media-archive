@@ -27,9 +27,9 @@ export async function makeMp4(
     '-c:v', opts.codec ?? 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
     '-metadata', 'location=+48.8566+002.3522/', '-metadata', 'title=private title',
   ];
-  // Debian bookworm's ffmpeg 5.1 writes this tag as the MP4 display matrix.
-  if (opts.rotate) args.push('-metadata:s:v:0', `rotate=${opts.rotate}`);
   await run('ffmpeg', [...args, file]);
+  // ffmpeg 5.1 ignores a `rotate` tag when muxing, so write the display matrix with exiftool (-Rotation).
+  if (opts.rotate) await run('exiftool', ['-q', '-overwrite_original', `-Rotation=${opts.rotate}`, file]);
 }
 
 /** An MP3 or M4A tone with an artist tag. */
