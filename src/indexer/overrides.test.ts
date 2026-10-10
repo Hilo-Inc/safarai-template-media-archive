@@ -17,6 +17,12 @@ describe('applyOverrides', () => {
     expect(out.location).toEqual({ lat: 1.23, lng: 4.56, name: 'Harbour' });
   });
 
+  it('re-derives caption hashtags from an edited caption and keeps the other tags', () => {
+    const tagged = { ...post, caption: 'Old #beach', tags: ['beach', 'holiday'] };
+    const out = applyOverrides(tagged, { hidden: [], featured: [], edits: { files_a: { caption: 'New #Sunset' } } });
+    expect(out.tags).toEqual(['holiday', 'sunset']);
+  });
+
   it('removes only the place name when it is cleared', () => {
     const out = applyOverrides(post, { hidden: [], featured: [], edits: { files_a: { place: null } } });
     expect(out.location).toEqual({ lat: 1.23, lng: 4.56 });

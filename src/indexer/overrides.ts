@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hashtags } from '../importers/text';
 import { keys } from '../lib/keys';
 import { shared } from '../lib/shared';
 import { PRIVATE_JSON } from '../lib/site';
@@ -66,7 +67,12 @@ export function applyOverrides(post: Post, overrides: Overrides): Post {
   const out: Post = { ...post, hidden: overrides.hidden.includes(post.id), featured: overrides.featured.includes(post.id) };
   const edit = overrides.edits[post.id];
   if (!edit) return out;
-  if (edit.caption !== undefined) out.caption = edit.caption;
+  if (edit.caption !== undefined) {
+    // Tag pages come from post.tags: swap the old caption's hashtags for the new one's.
+    const old = new Set(hashtags(post.caption));
+    out.tags = [...new Set([...post.tags.filter((t) => !old.has(t)), ...hashtags(edit.caption)])];
+    out.caption = edit.caption;
+  }
   if (edit.alt) {
     const alt = edit.alt;
     out.media = out.media.map((m, n) => (m.type === 'image' && String(n) in alt ? { ...m, alt: alt[String(n)] || null } : m));
