@@ -87,12 +87,13 @@ function setUp(dialog: HTMLDialogElement, grid: HTMLElement): void {
     pauseMedia();
     // Server-rendered HTML from our own fragment route (Astro escapes the content).
     body.innerHTML = fragment.html;
-    initCarousels(body);
-    initAudio(body);
     body.scrollTop = 0;
     document.title = fragment.title;
     updateButtons();
     if (!dialog.open) dialog.showModal();
+    // After showModal: the carousel reads the track's width, which is 0 while the dialog is closed.
+    initCarousels(body);
+    initAudio(body);
     // Focus the frame, not the first focusable in the post (often a carousel, which keeps the arrow keys), and not
     // <body> (where it falls when the old post is replaced), so the arrow keys step posts. The step buttons keep focus.
     const active = document.activeElement;
