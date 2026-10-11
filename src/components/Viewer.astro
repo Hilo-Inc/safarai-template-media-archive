@@ -3,6 +3,7 @@ import Icon from './Icon.astro';
 ---
 <dialog class="viewer" data-viewer aria-label="Post">
   <div class="viewer-frame" data-viewer-body tabindex="-1"></div>
+  <p class="visually-hidden" aria-live="polite" data-viewer-status></p>
   <button type="button" class="viewer-close" data-viewer-close aria-label="Close"><Icon name="close" /></button>
   <div class="viewer-bar">
     <button type="button" class="viewer-step prev" data-viewer-step="-1" aria-label="Previous post"><Icon name="prev" /></button>

@@ -23,6 +23,7 @@ if (dialog && grid) setUp(dialog, grid);
 
 function setUp(dialog: HTMLDialogElement, grid: HTMLElement): void {
   const body = dialog.querySelector<HTMLElement>('[data-viewer-body]')!;
+  const status = dialog.querySelector<HTMLElement>('[data-viewer-status]')!;
   const prev = dialog.querySelector<HTMLButtonElement>('[data-viewer-step="-1"]')!;
   const next = dialog.querySelector<HTMLButtonElement>('[data-viewer-step="1"]')!;
   const cache = new FragmentCache<Fragment>(6);
@@ -89,6 +90,9 @@ function setUp(dialog: HTMLDialogElement, grid: HTMLElement): void {
     body.innerHTML = fragment.html;
     body.scrollTop = 0;
     document.title = fragment.title;
+    dialog.setAttribute('aria-label', fragment.title);
+    // Stepping keeps focus on the step button, so the new post is otherwise silent to a screen reader.
+    if (dialog.open) status.textContent = fragment.title;
     updateButtons();
     if (!dialog.open) dialog.showModal();
     // After showModal: the carousel reads the track's width, which is 0 while the dialog is closed.
@@ -103,7 +107,11 @@ function setUp(dialog: HTMLDialogElement, grid: HTMLElement): void {
   }
 
   function closeView(): void {
+    begin(); // a post still loading must not reopen the viewer
     const last = current;
+    dialog.removeAttribute('aria-busy');
+    dialog.setAttribute('aria-label', 'Post');
+    status.textContent = '';
     pauseMedia();
     dialog.close();
     body.replaceChildren();
@@ -170,6 +178,8 @@ function setUp(dialog: HTMLDialogElement, grid: HTMLElement): void {
       void show(state.viewer);
     } else if (dialog.open) {
       closeView();
+    } else {
+      begin(); // a first open still loading belongs to the entry just left
     }
   });
 
@@ -188,6 +198,8 @@ function setUp(dialog: HTMLDialogElement, grid: HTMLElement): void {
   // On the document, not the dialog: focus falls to <body> when the focused step button is disabled at either end.
   document.addEventListener('keydown', (event) => {
     if (!dialog.open || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+    // Alt+← is Back and Cmd+←/→ Back/Forward; modified arrows belong to the browser and text selection.
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
     const target = event.target as Element;
     // Arrow keys belong to carousels, media controls and form fields when focus is in them.
     if (target.closest('[data-carousel], media-controller, input, textarea, select, audio')) return;
