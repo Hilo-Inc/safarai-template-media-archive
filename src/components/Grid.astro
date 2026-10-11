@@ -27,10 +27,10 @@ const sep = scope.basePath.includes('?') ? '&' : '?';
     {next && <a class="more" data-more href={`${scope.basePath}${sep}page=${next}`} data-fragment={fragmentUrl}>More</a>}
   </>
 ) : page.posts.length === 0 && page.page === 1 ? (
-  <p class="empty">
-    Nothing here yet.
-    {isOwner && <a href="/admin">Import your files</a>}
-  </p>
+  <div class="empty">
+    <p>Nothing here yet.</p>
+    {isOwner && <a class="button" href="/admin">Import your files</a>}
+  </div>
 ) : (
   <section class:list={['grid', look.tile]} data-grid style={`--cols: ${look.columns}; --desktop: ${desktop}`}>
     {page.posts.map((post) => <Tile post={post} look={look} />)}
@@ -43,9 +43,9 @@ const sep = scope.basePath.includes('?') ? '&' : '?';
 </script>
 
 <style>
-  .grid { display: grid; gap: 3px; grid-template-columns: repeat(var(--cols), 1fr); }
+  .grid { display: grid; gap: 2px; grid-template-columns: repeat(var(--cols), 1fr); }
   .grid.row { display: block; }
-  .more { grid-column: 1 / -1; justify-self: center; padding: 1rem; color: var(--muted); }
-  .empty { text-align: center; color: var(--muted); padding: 4rem 1rem; display: grid; gap: 0.5rem; }
+  .more { grid-column: 1 / -1; justify-self: center; padding: var(--sp-4); color: var(--muted); }
+  .empty { display: grid; gap: var(--sp-4); justify-items: center; text-align: center; color: var(--muted); padding: var(--sp-8) var(--sp-4); }
   @media (min-width: 736px) { .grid:not(.row) { gap: 4px; grid-template-columns: var(--desktop); } }
 </style>

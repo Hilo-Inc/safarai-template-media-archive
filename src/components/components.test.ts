@@ -83,7 +83,7 @@ describe('Tile', () => {
     const youtube = await container.renderToString(Tile, { props: { post: summary(), look: presetLook('youtube') } });
     const generic = await container.renderToString(Tile, { props: { post: summary(), look: presetLook('generic') } });
     expect(youtube).toContain('1:15');
-    expect(generic).not.toContain('1:15');
+    expect(generic).not.toMatch(/class="duration"/);
     expect(youtube).toContain('href="/p/files_a"');
   });
 
@@ -93,6 +93,15 @@ describe('Tile', () => {
     const text = await container.renderToString(Tile, { props: { post: summary({ cover: null, kind: 'post' }), look: presetLook('generic') } });
     expect(text).toContain('First line');
     expect(text).not.toContain('second');
+  });
+
+  it('draws the corner icon and a hover line, and names the pin and carousel for screen readers', async () => {
+    const pinned = await container.renderToString(Tile, { props: { post: summary({ featured: true }), look: presetLook('generic') } });
+    expect(pinned).toContain('Pinned');
+    expect(pinned).toContain('class="icon"');
+    expect(pinned).toContain('1 Jan 2025 · 1:15');
+    expect(pinned).not.toContain('▶');
+    expect(pinned).not.toContain('▣');
   });
 });
 

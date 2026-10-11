@@ -4,7 +4,9 @@ import { KIND_LABELS, type Look } from '../render/preset-look';
 import { firstLine } from '../render/caption';
 import { srcset } from '../render/choose-layout';
 import { formatDate, formatDuration } from '../render/format';
+import { tileHover, tileIcon } from '../render/tile';
 import type { PostSummary } from '../schema/index-types';
+import Icon from './Icon.astro';
 
 interface Props {
   post: PostSummary;
@@ -21,7 +23,8 @@ if (cover?.thumbhash) {
 }
 const label = firstLine(post.caption, 120) || KIND_LABELS[post.kind] || 'Post';
 const showDuration = look.durationBadge && post.duration !== null;
-const isPlayable = post.kind !== 'post' && post.duration !== null;
+const icon = tileIcon(post);
+const iconText = icon === 'pin' ? 'Pinned' : icon === 'carousel' ? `${post.count} items` : null;
 ---
 {look.tile === 'row' ? (
   <a class="row" href={`/p/${post.id}`}>
@@ -35,7 +38,7 @@ const isPlayable = post.kind !== 'post' && post.duration !== null;
       <img
         src={small?.src ?? cover.src}
         srcset={cover.variants.length > 0 ? srcset(cover.variants) : undefined}
-        sizes="(max-width: 935px) 34vw, 310px"
+        sizes="(max-width: 975px) 34vw, 320px"
         alt=""
         width={cover.width}
         height={cover.height}
@@ -44,24 +47,26 @@ const isPlayable = post.kind !== 'post' && post.duration !== null;
         style={placeholder}
       />
     ) : (
-      <span class="text">{label}</span>
+      <span class="text"><Icon name={post.kind === 'track' ? 'audio' : 'carousel'} size={20} /><span class="line">{label}</span></span>
     )}
-    {post.count > 1 && <span class="badge corner" title={`${post.count} items`}><span class="visually-hidden">{post.count} items</span>▣</span>}
-    {post.count === 1 && isPlayable && !showDuration && <span class="badge corner" aria-hidden="true">▶</span>}
-    {showDuration && <span class="badge duration">{formatDuration(post.duration!)}</span>}
-    {post.featured && <span class="badge pin">Pinned</span>}
+    {icon && <span class="corner"><Icon name={icon} size={20} />{iconText && <span class="visually-hidden">{iconText}</span>}</span>}
+    {showDuration && <span class="duration">{formatDuration(post.duration!)}</span>}
+    <span class="hover" aria-hidden="true">{tileHover(post)}</span>
   </a>
 )}
 
 <style>
   .tile { position: relative; display: block; overflow: hidden; background: var(--tile); }
-  .tile img { width: 100%; height: 100%; object-fit: cover; }
-  .tile .text { position: absolute; inset: 0; display: grid; place-items: center; padding: 0.75rem; text-align: center; font-size: 0.9rem; overflow: hidden; }
-  .badge { position: absolute; color: #fff; text-shadow: 0 0 3px #0009; font-size: 0.8rem; }
-  .corner { top: 0.4rem; right: 0.5rem; }
-  .duration { bottom: 0.4rem; right: 0.4rem; background: #000b; padding: 0 0.3rem; border-radius: 0.2rem; text-shadow: none; }
-  .pin { top: 0.4rem; left: 0.5rem; }
-  .row { display: grid; grid-template-columns: 64px 1fr; gap: 0 0.75rem; padding: 0.5rem 1rem; text-decoration: none; border-bottom: 1px solid var(--line); }
-  .row img { grid-row: span 2; width: 64px; height: 64px; object-fit: cover; background: var(--tile); }
-  .row .meta { color: var(--muted); font-size: 0.85rem; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .tile .text { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--sp-2); padding: var(--sp-3); text-align: center; font-size: var(--fs-sm); color: var(--muted); }
+  .tile .line { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--fg); }
+  .corner { position: absolute; top: var(--sp-2); right: var(--sp-2); color: #fff; filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.6)); }
+  .duration { position: absolute; bottom: var(--sp-2); right: var(--sp-2); padding: 0 var(--sp-1); border-radius: 4px; background: rgb(0 0 0 / 0.7); color: #fff; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+  .hover { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--sp-2); background: var(--scrim); color: #fff; font-size: var(--fs-sm); font-weight: 600; text-align: center; opacity: 0; transition: opacity 120ms; }
+  .tile:focus-visible { outline-offset: -2px; }
+  .tile:focus-visible .hover { opacity: 1; }
+  @media (hover: hover) and (pointer: fine) { .tile:hover .hover { opacity: 1; } }
+  .row { display: grid; grid-template-columns: 64px 1fr; gap: 0 var(--sp-3); padding: var(--sp-2) var(--sp-4); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .row img { grid-row: span 2; width: 64px; height: 64px; object-fit: cover; background: var(--tile); border-radius: var(--r-sm); }
+  .row .meta { color: var(--muted); font-size: var(--fs-xs); }
 </style>
