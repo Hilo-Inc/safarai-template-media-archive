@@ -2,6 +2,7 @@
 import Grid from '../../components/Grid.astro';
 import Header from '../../components/Header.astro';
 import Layout from '../../components/Layout.astro';
+import Missing from '../../components/Missing.astro';
 import { getEnv } from '../../env';
 import { absoluteUrl, gridScope, loadChrome, loadGrid, pageDeps, parsePage } from '../../server/pages';
 
@@ -21,10 +22,6 @@ const title = scope ? `${scope.title} · ${chrome.site.title}` : chrome.site.tit
 >
   <main>
     <Header chrome={chrome} current={scope?.basePath ?? null} role={role} />
-    {page ? <Grid page={page} scope={scope!} look={chrome.look} isOwner={role === 'admin'} /> : <p class="missing">This page doesn't exist.</p>}
+    {page ? <Grid page={page} scope={scope!} look={chrome.look} isOwner={role === 'admin'} /> : <Missing message="This page doesn't exist." />}
   </main>
 </Layout>
-
-<style>
-  .missing { text-align: center; padding: 4rem 1rem; color: var(--muted); }
-</style>

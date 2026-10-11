@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatCount, formatDate, formatDuration } from './format';
+import { formatBytes, formatCount, formatDate, formatDuration, postCount } from './format';
 
 describe('format', () => {
   it('writes durations as m:ss or h:mm:ss', () => {
@@ -25,5 +25,14 @@ describe('format', () => {
     expect(formatBytes(512)).toBe('512 B');
     expect(formatBytes(5_500_000_000)).toBe('5.5 GB');
     expect(formatBytes(1_250_000)).toBe('1.3 MB');
+  });
+});
+
+describe('postCount', () => {
+  it('uses the singular for one and groups thousands', () => {
+    expect(postCount(0)).toBe('0 posts');
+    expect(postCount(1)).toBe('1 post');
+    expect(postCount(36)).toBe('36 posts');
+    expect(postCount(1204)).toBe('1,204 posts');
   });
 });

@@ -4,7 +4,9 @@ import { presetLook } from '../render/preset-look';
 import type { IndexPage, PostSummary } from '../schema/index-types';
 import type { MediaItem as Item } from '../schema/post';
 import { samplePost } from '../../test/fixtures/posts';
+import type { Chrome } from '../server/pages';
 import Grid from './Grid.astro';
+import Header from './Header.astro';
 import Icon from './Icon.astro';
 import MediaItem from './MediaItem.astro';
 import Post from './Post.astro';
@@ -133,5 +135,45 @@ describe('Icon', () => {
     const html = await container.renderToString(Icon, { props: { name } });
     expect(html).toMatch(/^<svg class="icon"[^>]*viewBox="0 0 24 24"[^>]*aria-hidden="true"/);
     expect(html).toMatch(/<(path|rect|circle) /);
+  });
+});
+
+describe('Header', () => {
+  const chrome = (extra: Partial<Chrome> = {}): Chrome => ({
+    site: { title: 'Demo Archive', bio: 'Line one\nLine two', links: [{ label: 'Website', url: 'https://example.com' }], avatar: null },
+    avatarUrl: null,
+    meta: { counts: { all: 36, platforms: {}, kinds: { post: 24, video: 11, track: 1 } } } as unknown as Chrome['meta'],
+    look: presetLook('generic'),
+    tabs: [
+      { kind: 'post', label: 'Posts', count: 24 },
+      { kind: 'video', label: 'Videos', count: 11 },
+    ],
+    ...extra,
+  });
+
+  it('shows the total, the bio and links, and the kind tabs outside the header', async () => {
+    const html = await container.renderToString(Header, { props: { chrome: chrome(), current: '/kind/video', role: null } });
+    expect(html).toContain('36 posts');
+    expect(html).toContain('Line one');
+    expect(html).toContain('href="https://example.com"');
+    expect(html).toMatch(/<\/header>\s*<nav[^>]*class="tabbar/);
+    expect(html).toMatch(/<a href="\/kind\/video" aria-current="page"/);
+    expect(html).not.toContain('Sign out');
+  });
+
+  it('gives signed-in visitors a menu, and only admins a Manage link', async () => {
+    const viewer = await container.renderToString(Header, { props: { chrome: chrome(), current: '/', role: 'viewer' } });
+    expect(viewer).toContain('<details');
+    expect(viewer).toContain('Sign out');
+    expect(viewer).not.toContain('href="/admin"');
+    const admin = await container.renderToString(Header, { props: { chrome: chrome(), current: '/', role: 'admin' } });
+    expect(admin).toContain('href="/admin"');
+  });
+
+  it('compact form: title linking home, no bio, no tabs', async () => {
+    const html = await container.renderToString(Header, { props: { chrome: chrome(), current: null, role: null, compact: true } });
+    expect(html).toContain('Demo Archive');
+    expect(html).not.toContain('Line one');
+    expect(html).not.toContain('tabbar');
   });
 });

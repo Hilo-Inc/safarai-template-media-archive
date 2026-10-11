@@ -1,0 +1,14 @@
+---
+interface Props {
+  message: string;
+}
+---
+<div class="missing">
+  <p>{Astro.props.message}</p>
+  <a href="/">← All posts</a>
+</div>
+
+<style>
+  .missing { display: grid; gap: var(--sp-3); justify-items: center; text-align: center; padding: var(--sp-8) var(--sp-4); color: var(--muted); }
+  .missing a { color: var(--accent); text-decoration: none; font-weight: 600; }
+</style>

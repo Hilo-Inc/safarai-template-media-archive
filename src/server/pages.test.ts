@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveConfig } from '../config/load';
 import type { IndexPage } from '../schema/index-types';
 import { makePost, samplePost } from '../../test/fixtures/posts';
-import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, ogImage, parsePage, scopeFromParam, type PageDeps } from './pages';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, ogImage, parsePage, scopeFromParam, tagPostCount, type PageDeps } from './pages';
 
 const config = resolveConfig({}, {});
 const sign = async (src: string) => `https://media.example/${src}`;
@@ -155,5 +155,17 @@ describe('corrupt bucket JSON', () => {
   it('still lets store errors through', async () => {
     const broken = deps({}, { read: async () => { throw new Error('connect ECONNREFUSED'); } });
     await expect(loadChrome(broken)).rejects.toThrow('ECONNREFUSED');
+  });
+});
+
+describe('tagPostCount', () => {
+  const posts = (n: number) => Array.from({ length: n }, (_, i) => ({ ...summaryOf(i) }));
+  function summaryOf(i: number) {
+    return { id: `files_${i}`, kind: 'post' as const, platform: 'files', published: '2025-01-01T00:00:00.000Z', caption: '', cover: null, count: 1, duration: null, featured: false };
+  }
+
+  it('counts a tag that fits on one page, and gives no number for a longer one', () => {
+    expect(tagPostCount({ page: 1, pages: 1, posts: posts(4) })).toBe(4);
+    expect(tagPostCount({ page: 1, pages: 3, posts: posts(48) })).toBeNull();
   });
 });

@@ -19,6 +19,11 @@ export function formatCount(n: number): string {
   return COUNT.format(n);
 }
 
+/** "1 post", "36 posts". */
+export function postCount(n: number): string {
+  return `${formatCount(n)} ${n === 1 ? 'post' : 'posts'}`;
+}
+
 export function formatBytes(n: number): string {
   let value = n;
   let unit = 0;

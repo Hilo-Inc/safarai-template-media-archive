@@ -2,8 +2,10 @@
 import Grid from '../../components/Grid.astro';
 import Header from '../../components/Header.astro';
 import Layout from '../../components/Layout.astro';
+import Missing from '../../components/Missing.astro';
 import { getEnv } from '../../env';
-import { absoluteUrl, gridScope, loadChrome, loadGrid, pageDeps, parsePage } from '../../server/pages';
+import { postCount } from '../../render/format';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, pageDeps, parsePage, tagPostCount } from '../../server/pages';
 
 const deps = pageDeps();
 const role = Astro.locals.role;
@@ -12,6 +14,7 @@ const n = parsePage(Astro.url.searchParams.get('page'));
 const [chrome, page] = await Promise.all([loadChrome(deps), scope && n ? loadGrid(scope, n, deps) : null]);
 if (!page) Astro.response.status = 404;
 const title = scope ? `${scope.title} · ${chrome.site.title}` : chrome.site.title;
+const count = page ? tagPostCount(page) : null;
 ---
 <Layout
   title={title}
@@ -20,11 +23,23 @@ const title = scope ? `${scope.title} · ${chrome.site.title}` : chrome.site.tit
   og={{ title, description: chrome.site.bio, url: absoluteUrl(getEnv().siteUrl, Astro.url.pathname), image: deps.config.visibility === 'public' && deps.mediaPublicUrl ? chrome.avatarUrl : null }}
 >
   <main>
-    <Header chrome={chrome} current={scope?.basePath ?? null} role={role} />
-    {page ? <Grid page={page} scope={scope!} look={chrome.look} isOwner={role === 'admin'} /> : <p class="missing">This page doesn't exist.</p>}
+    <Header chrome={chrome} current={null} role={role} compact />
+    {page && scope ? (
+      <>
+        <div class="tag-heading">
+          <h1>{scope.title}</h1>
+          {count !== null && <span class="n">{postCount(count)}</span>}
+          <a href="/">← All posts</a>
+        </div>
+        <Grid page={page} scope={scope} look={chrome.look} isOwner={role === 'admin'} />
+      </>
+    ) : <Missing message="This page doesn't exist." />}
   </main>
 </Layout>
 
 <style>
-  .missing { text-align: center; padding: 4rem 1rem; color: var(--muted); }
+  .tag-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); padding: var(--sp-5) var(--sp-4) var(--sp-4); }
+  .tag-heading h1 { font-size: var(--fs-lg); }
+  .tag-heading .n { color: var(--muted); font-size: var(--fs-sm); }
+  .tag-heading a { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 600; font-size: var(--fs-sm); }
 </style>

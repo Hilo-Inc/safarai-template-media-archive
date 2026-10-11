@@ -94,6 +94,11 @@ export async function loadGrid(scope: GridScope, page: number, deps: PageDeps): 
   return signJsonPaths(data, deps.sign);
 }
 
+/** A tag page's post count, when the whole tag fits on one page (the index stores page counts, not post counts). */
+export function tagPostCount(page: IndexPage): number | null {
+  return page.pages === 1 ? page.posts.length : null;
+}
+
 export async function loadPost(id: string, role: Role | null, deps: PageDeps): Promise<Post | null> {
   if (!POST_ID_RE.test(id) || id.length > 120) return null;
   const parsed = postSchema.safeParse(await readOrNull(deps.read, keys.post(id)));

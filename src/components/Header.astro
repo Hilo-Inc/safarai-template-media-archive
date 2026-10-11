@@ -1,46 +1,59 @@
 ---
 import type { Role } from '../lib/session';
-import { formatCount } from '../render/format';
+import { formatCount, postCount } from '../render/format';
 import type { Chrome } from '../server/pages';
+import Icon from './Icon.astro';
 
 interface Props {
   chrome: Chrome;
   /** Base path of the current grid ("/", "/kind/video", …), or null on other pages. */
   current: string | null;
   role: Role | null;
+  /** Post and tag pages: avatar and title on one line, no bio, no tabs. */
+  compact?: boolean;
 }
 
-const { chrome, current, role } = Astro.props;
+const { chrome, current, role, compact = false } = Astro.props;
 const { site, avatarUrl, meta, tabs } = chrome;
-const total = meta?.counts.all ?? 0;
+const size = compact ? 32 : 150;
 ---
-<header class="header">
-  <a class="identity" href="/">
-    {avatarUrl ? <img class="avatar" src={avatarUrl} alt="" width="96" height="96" /> : <span class="avatar blank" aria-hidden="true"></span>}
-    <span class="title">{site.title}</span>
+<header class:list={['header', { compact }]}>
+  <a class="avatar-link" href="/" tabindex={compact ? undefined : '-1'} aria-hidden={compact ? undefined : 'true'}>
+    {avatarUrl ? <img class="avatar" src={avatarUrl} alt="" width={size} height={size} /> : <span class="avatar" aria-hidden="true"></span>}
+    {compact && <span class="title">{site.title}</span>}
   </a>
-  <p class="count">{formatCount(total)} {total === 1 ? 'post' : 'posts'}</p>
-  {site.bio && <p class="bio">{site.bio}</p>}
-  {site.links.length > 0 && (
-    <ul class="links">
-      {site.links.map((l) => <li><a href={l.url} rel="me noopener noreferrer">{l.label}</a></li>)}
-    </ul>
+  {!compact && (
+    <>
+      <h1 class="title"><a href="/">{site.title}</a></h1>
+      <p class="count">{postCount(meta?.counts.all ?? 0)}</p>
+      {site.bio && <p class="bio">{site.bio}</p>}
+      {site.links.length > 0 && (
+        <ul class="links">
+          {site.links.map((l) => <li><a href={l.url} rel="me noopener noreferrer">{l.label}</a></li>)}
+        </ul>
+      )}
+    </>
   )}
-  <div class="actions">
-    {role === 'admin' && <a href="/admin">Manage</a>}
-    {role && <button type="button" data-logout>Sign out</button>}
-  </div>
-  {tabs.length > 0 && (
-    <nav class="tabs" aria-label="Kinds">
-      <a href="/" aria-current={current === '/' ? 'page' : undefined}>All</a>
-      {tabs.map((t) => (
-        <a href={`/kind/${t.kind}`} aria-current={current === `/kind/${t.kind}` ? 'page' : undefined}>
-          {t.label} <span class="n">{formatCount(t.count)}</span>
-        </a>
-      ))}
-    </nav>
+  {role && (
+    <details class="menu" data-menu>
+      <summary aria-label="Menu"><Icon name="more" /></summary>
+      <div class="menu-items">
+        {role === 'admin' && <a href="/admin">Manage</a>}
+        <button type="button" data-logout>Sign out</button>
+      </div>
+    </details>
   )}
 </header>
+{!compact && tabs.length > 0 && (
+  <nav class="tabbar kinds" aria-label="Kinds">
+    <a href="/" aria-current={current === '/' ? 'page' : undefined}>All</a>
+    {tabs.map((t) => (
+      <a href={`/kind/${t.kind}`} aria-current={current === `/kind/${t.kind}` ? 'page' : undefined}>
+        {t.label}<span class="n">{formatCount(t.count)}</span>
+      </a>
+    ))}
+  </nav>
+)}
 
 <script>
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-logout]')) {
@@ -49,22 +62,59 @@ const total = meta?.counts.all ?? 0;
       location.assign('/');
     });
   }
+  // Close the menu on a click elsewhere or Escape.
+  document.addEventListener('click', (event) => {
+    for (const menu of document.querySelectorAll<HTMLDetailsElement>('[data-menu][open]')) if (!menu.contains(event.target as Node)) menu.open = false;
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') for (const menu of document.querySelectorAll<HTMLDetailsElement>('[data-menu][open]')) menu.open = false;
+  });
+  // Keep the current tab in view when the bar scrolls sideways.
+  document.querySelector('.kinds [aria-current="page"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 </script>
 
 <style>
-  .header { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; padding: 1.5rem 1rem 0; align-items: center; }
-  .identity { display: contents; text-decoration: none; }
-  .avatar { grid-row: span 2; width: 77px; height: 77px; border-radius: 50%; object-fit: cover; background: var(--tile); }
-  .title { font-size: 1.25rem; font-weight: 600; }
-  .count, .bio { margin: 0; grid-column: 2; }
-  .count { color: var(--muted); }
-  .bio { grid-column: 1 / -1; white-space: pre-line; }
-  .links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; margin: 0; padding: 0; }
-  .actions { grid-column: 1 / -1; display: flex; gap: 1rem; }
-  .actions button { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; }
-  .tabs { grid-column: 1 / -1; display: flex; justify-content: center; gap: 2rem; border-top: 1px solid var(--line); margin-top: 1rem; }
-  .tabs a { padding: 0.75rem 0; text-decoration: none; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .tabs a[aria-current='page'] { color: var(--fg); border-top: 1px solid var(--fg); margin-top: -1px; }
-  .tabs .n { color: var(--muted); }
-  @media (min-width: 736px) { .avatar { width: 150px; height: 150px; } .header { padding-top: 2rem; } }
+  .header {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'avatar title menu' 'avatar count menu' 'bio bio bio' 'links links links';
+    gap: var(--sp-1) var(--sp-4);
+    align-items: center;
+    padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  }
+  .avatar-link { grid-area: avatar; display: flex; align-items: center; gap: var(--sp-2); text-decoration: none; }
+  .avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--tile); display: block; }
+  .title { grid-area: title; font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+  .title a { text-decoration: none; }
+  .count { grid-area: count; color: var(--muted); font-size: var(--fs-sm); }
+  .bio { grid-area: bio; white-space: pre-line; margin-top: var(--sp-2); }
+  .links { grid-area: links; display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); list-style: none; margin: 0; padding: 0; }
+  .links a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: var(--fs-sm); }
+  .menu { grid-area: menu; align-self: start; position: relative; }
+  .menu summary { list-style: none; cursor: pointer; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-full); color: var(--fg); }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu summary:hover { background: var(--tile); }
+  .menu-items { position: absolute; right: 0; top: 44px; z-index: 20; min-width: 10rem; display: grid; padding: var(--sp-1); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 24px rgb(0 0 0 / 0.15); }
+  .menu-items :is(a, button) { display: block; text-align: left; padding: var(--sp-2) var(--sp-3); border: 0; background: none; border-radius: var(--r-sm); text-decoration: none; font-size: var(--fs-sm); cursor: pointer; }
+  .menu-items :is(a, button):hover { background: var(--tile); }
+
+  .compact { grid-template-areas: 'avatar menu'; grid-template-columns: 1fr auto; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+  .compact .avatar { width: 32px; height: 32px; }
+  .compact .title { font-size: var(--fs-md); }
+
+  .kinds { position: sticky; top: 0; z-index: 10; justify-content: center; }
+  @media (max-width: 735px) { .kinds { justify-content: flex-start; } }
+
+  @media (min-width: 736px) {
+    .header:not(.compact) {
+      grid-template-areas: 'avatar title menu' 'avatar count menu' 'avatar bio bio' 'avatar links links';
+      grid-template-columns: 150px 1fr auto;
+      column-gap: var(--sp-7);
+      padding: var(--sp-6) var(--sp-4) var(--sp-6);
+    }
+    .header:not(.compact) .avatar { width: 150px; height: 150px; }
+    .header:not(.compact) .title { font-size: var(--fs-xl); }
+    .header:not(.compact) .avatar-link { align-self: start; }
+  }
 </style>
