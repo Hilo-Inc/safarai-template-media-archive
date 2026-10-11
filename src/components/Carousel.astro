@@ -1,5 +1,6 @@
 ---
 import type { MediaItem as Item } from '../schema/post';
+import Icon from './Icon.astro';
 import MediaItem from './MediaItem.astro';
 
 interface Props {
@@ -9,42 +10,21 @@ interface Props {
 
 const { items, aspect } = Astro.props;
 ---
-<div class="carousel" data-carousel>
-  <ul class="track" style={`aspect-ratio: ${aspect}`}>
+<div class="carousel" data-carousel style={`--aspect: ${aspect}`}>
+  <ul class="carousel-track" style={`aspect-ratio: ${aspect}`}>
     {items.map((item, i) => (
       <li aria-label={`${i + 1} of ${items.length}`}>
         <MediaItem item={item} aspect={aspect} eager={i === 0} />
       </li>
     ))}
   </ul>
-  <button type="button" class="prev" data-step="-1" aria-label="Previous">‹</button>
-  <button type="button" class="next" data-step="1" aria-label="Next">›</button>
-  <p class="count" aria-live="polite"><span data-index>1</span> / {items.length}</p>
+  <button type="button" class="carousel-step prev" data-step="-1" aria-label="Previous photo"><Icon name="prev" size={18} /></button>
+  <button type="button" class="carousel-step next" data-step="1" aria-label="Next photo"><Icon name="next" size={18} /></button>
+  <div class="carousel-dots" aria-hidden="true">{items.map(() => <span></span>)}</div>
+  <p class="carousel-count visually-hidden" aria-live="polite"><span data-index>1</span> / {items.length}</p>
 </div>
 
 <script>
-  for (const root of document.querySelectorAll<HTMLElement>('[data-carousel]')) {
-    const track = root.querySelector<HTMLElement>('.track')!;
-    const index = root.querySelector<HTMLElement>('[data-index]')!;
-    const current = () => Math.round(track.scrollLeft / track.clientWidth);
-    for (const button of root.querySelectorAll<HTMLButtonElement>('[data-step]')) {
-      button.addEventListener('click', () => {
-        track.scrollTo({ left: (current() + Number(button.dataset.step)) * track.clientWidth, behavior: 'smooth' });
-      });
-    }
-    track.addEventListener('scroll', () => {
-      index.textContent = String(current() + 1);
-      for (const media of track.querySelectorAll('video, audio')) if (!media.closest('li')?.matches(`:nth-child(${current() + 1})`)) (media as HTMLMediaElement).pause();
-    }, { passive: true });
-  }
+  import { initCarousels } from '../client/carousel';
+  initCarousels();
 </script>
-
-<style>
-  .carousel { position: relative; }
-  .track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0; padding: 0; list-style: none; }
-  .track > li { flex: 0 0 100%; scroll-snap-align: start; display: grid; place-items: center; }
-  .prev, .next { position: absolute; top: 50%; translate: 0 -50%; width: 2rem; height: 2rem; border-radius: 50%; border: 0; background: #fffc; color: #000; cursor: pointer; }
-  .prev { left: 0.5rem; }
-  .next { right: 0.5rem; }
-  .count { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 0.25rem 0 0; }
-</style>

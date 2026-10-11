@@ -12,13 +12,13 @@ interface Props {
 
 const { item, aspect, eager = false } = Astro.props;
 const ratio = aspect ?? aspectOf(item);
-const box = `aspect-ratio: ${ratio}`;
+const box = `aspect-ratio: ${ratio}; --aspect: ${ratio}`;
 const pick = (variants: { w: number; src: string }[], fallback: string) =>
   [...variants].sort((a, b) => b.w - a.w).find((v) => v.w <= 1280)?.src ?? fallback;
 ---
 {item.type === 'image' && (
   <img
-    class="media"
+    class="media-item"
     src={pick(item.variants, item.src)}
     srcset={item.variants.length > 0 ? srcset(item.variants) : undefined}
     sizes={IMAGE_SIZES}
@@ -31,7 +31,7 @@ const pick = (variants: { w: number; src: string }[], fallback: string) =>
   />
 )}
 {item.type === 'video' && item.playable && (
-  <media-controller class="media" style={box}>
+  <media-controller class="media-item" style={box}>
     <video
       slot="media"
       src={item.src}
@@ -55,7 +55,7 @@ const pick = (variants: { w: number; src: string }[], fallback: string) =>
   </media-controller>
 )}
 {item.type === 'video' && !item.playable && (
-  <figure class="media unplayable" style={box}>
+  <figure class="media-item media-unplayable" style={box}>
     {item.poster ? <img src={pick(item.poster.variants, item.poster.src)} alt="" width={item.poster.width} height={item.poster.height} loading="lazy" /> : <div class="blank"></div>}
     <figcaption>
       This video's format can't play in a web browser.
@@ -64,26 +64,14 @@ const pick = (variants: { w: number; src: string }[], fallback: string) =>
   </figure>
 )}
 {item.type === 'audio' && (
-  <div class="media audio" data-audio data-peaks={item.peaks ?? ''} data-duration={item.duration}>
-    <div class="wave" data-wave></div>
+  <div class="media-item media-audio" data-audio data-peaks={item.peaks ?? ''} data-duration={item.duration}>
+    <div class="media-wave" data-wave></div>
     <audio controls preload="metadata" src={item.src}></audio>
   </div>
 )}
 
 <script>
   import 'media-chrome';
-  import '../client/audio';
+  import { initAudio } from '../client/audio';
+  initAudio();
 </script>
-
-<style>
-  .media { width: 100%; background: var(--tile); object-fit: contain; display: block; }
-  media-controller { display: block; }
-  media-controller video { width: 100%; height: 100%; object-fit: contain; }
-  .unplayable { position: relative; margin: 0; }
-  .unplayable img, .unplayable .blank { width: 100%; height: 100%; object-fit: contain; opacity: 0.6; }
-  .unplayable figcaption { position: absolute; inset: auto 0 0; padding: 0.75rem; background: #000c; color: #fff; }
-  .unplayable a { color: #fff; font-weight: 600; }
-  .audio { padding: 1rem; display: grid; gap: 0.5rem; background: none; }
-  .audio audio { width: 100%; }
-  .wave:empty { display: none; }
-</style>

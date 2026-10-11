@@ -1,0 +1,41 @@
+/* Post, carousel and media styles. Global (imported by Layout) because the viewer shows posts on grid pages,
+   which never render these components and so would not get their scoped styles. */
+.post { --frame-h: 80vh; display: grid; gap: var(--sp-4); }
+.post-media { min-width: 0; }
+.post-media > :is(.media-item, .carousel) { width: min(100%, calc(var(--frame-h) * var(--aspect, 1))); margin-inline: auto; }
+.post.story .post-media { display: grid; gap: var(--sp-4); max-width: 420px; margin: 0 auto; width: 100%; }
+.post-text { display: grid; gap: var(--sp-2); align-content: start; padding: 0 var(--sp-4); }
+.post-identity { display: flex; align-items: center; gap: var(--sp-2); font-weight: 600; text-decoration: none; padding-bottom: var(--sp-2); }
+.post-identity img, .post-identity .blank { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--tile); }
+.post-caption { white-space: pre-line; overflow-wrap: anywhere; }
+.post-caption a { color: var(--accent); text-decoration: none; }
+.post-meta, .post-source { color: var(--muted); font-size: var(--fs-xs); }
+.post-source a { color: inherit; }
+.post-hidden { color: var(--danger); font-weight: 600; }
+@media (min-width: 900px) {
+  .post:is(.image, .carousel, .video, .vertical-video) { grid-template-columns: minmax(0, 1fr) 22rem; align-items: start; gap: var(--sp-6); }
+  .post-text { padding: 0; }
+}
+
+.carousel { position: relative; }
+.carousel-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0; padding: 0; list-style: none; }
+.carousel-track::-webkit-scrollbar { display: none; }
+.carousel-track > li { flex: 0 0 100%; scroll-snap-align: start; display: grid; place-items: center; }
+.carousel-step { position: absolute; top: 50%; translate: 0 -50%; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--r-full); background: rgb(255 255 255 / 0.9); color: #111; cursor: pointer; box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); }
+.carousel-step.prev { left: var(--sp-2); }
+.carousel-step.next { right: var(--sp-2); }
+.carousel-step:disabled { visibility: hidden; }
+.carousel-dots { display: flex; justify-content: center; gap: var(--sp-1); margin-top: var(--sp-2); }
+.carousel-dots > span { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.carousel-dots > span[data-on] { background: var(--accent); }
+
+.media-item { display: block; width: 100%; height: auto; background: var(--tile); object-fit: contain; }
+media-controller.media-item { display: block; }
+media-controller.media-item video { width: 100%; height: 100%; object-fit: contain; }
+.media-unplayable { position: relative; margin: 0; }
+.media-unplayable :is(img, .blank) { width: 100%; height: 100%; object-fit: contain; opacity: 0.6; }
+.media-unplayable figcaption { position: absolute; inset: auto 0 0; padding: var(--sp-3); background: rgb(0 0 0 / 0.8); color: #fff; }
+.media-unplayable a { color: #fff; font-weight: 600; }
+.media-audio { display: grid; gap: var(--sp-2); padding: var(--sp-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.media-audio audio { width: 100%; }
+.media-wave:empty { display: none; }

@@ -5,6 +5,7 @@ import type { IndexPage, PostSummary } from '../schema/index-types';
 import type { MediaItem as Item } from '../schema/post';
 import { samplePost } from '../../test/fixtures/posts';
 import type { Chrome } from '../server/pages';
+import Carousel from './Carousel.astro';
 import Grid from './Grid.astro';
 import Header from './Header.astro';
 import Icon from './Icon.astro';
@@ -184,5 +185,25 @@ describe('Header', () => {
     expect(html).toContain('Demo Archive');
     expect(html).not.toContain('Line one');
     expect(html).not.toContain('tabbar');
+  });
+});
+
+describe('post components carry no scoped styles (the viewer shows them on pages that never rendered them)', () => {
+  const carouselPost = { ...samplePost, media: [samplePost.media[0]!, { ...samplePost.media[0]!, src: 'media/x/1/orig.jpg' }] };
+
+  it('Post, Carousel and MediaItem render without data-astro-cid attributes', async () => {
+    const post = await container.renderToString(Post, { props: { post: carouselPost, mentions: 'text', identity: { title: 'Demo Archive', avatarUrl: null } } });
+    const carousel = await container.renderToString(Carousel, { props: { items: carouselPost.media, aspect: 0.8 } });
+    const item = await container.renderToString(MediaItem, { props: { item: samplePost.media[0]! } });
+    for (const html of [post, carousel, item]) expect(html).not.toMatch(/data-astro-cid/);
+  });
+
+  it('Post shows the identity, and the carousel has labelled steps and dots', async () => {
+    const html = await container.renderToString(Post, { props: { post: carouselPost, mentions: 'text', identity: { title: 'Demo Archive', avatarUrl: null } } });
+    expect(html).toContain('class="post-identity"');
+    expect(html).toContain('Demo Archive');
+    expect(html).toContain('aria-label="Previous photo"');
+    expect(html).toContain('aria-label="Next photo"');
+    expect(html).toMatch(/class="carousel-dots" aria-hidden="true"/);
   });
 });
