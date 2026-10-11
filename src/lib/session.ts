@@ -1,16 +1,18 @@
 import { createHash, createHmac, scryptSync, timingSafeEqual } from 'node:crypto';
-import { getEnv } from '../env';
+import { getEnv, type Credential } from '../env';
+import { verifyPassword } from './password-hash';
 import { shared } from './shared';
 
 export type Role = 'admin' | 'viewer';
 export const SESSION_COOKIE = 'archive_session';
 export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
-type Passwords = { adminPassword: string; viewerPassword: string | null };
+type Credentials = { admin: Credential; viewer: Credential | null };
 
-/** SESSION_SECRET when set; otherwise derived from both passwords, so changing a password signs everyone out. */
-export function deriveSecret(env: Passwords, explicit?: string): Buffer {
-  const material = explicit || `media-archive-session\0${env.adminPassword}\0${env.viewerPassword ?? ''}`;
+/** SESSION_SECRET when set; otherwise derived from both credentials, so changing a password signs everyone out. */
+export function deriveSecret(env: Credentials, explicit?: string): Buffer {
+  // For plain passwords this is the same material as before hashes existed: sessions survive the upgrade.
+  const material = explicit || `media-archive-session\0${env.admin.value}\0${env.viewer?.value ?? ''}`;
   // scrypt makes guessing the admin password offline from a viewer's cookie expensive.
   return scryptSync(material, 'safarai-media-archive/session/v1', 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
 }
@@ -45,9 +47,17 @@ export function verifySession(value: string | undefined, secret: Buffer, now = D
   return role;
 }
 
-export function checkPassword(given: string, env: Passwords): Role | null {
+function matches(given: string, credential: Credential): Promise<boolean> | boolean {
+  return credential.kind === 'plain' ? same(given, credential.value) : verifyPassword(given, credential.hash);
+}
+
+/**
+ * The role a password signs in as. 'both' when it opens both roles, which
+ * only two hashes can do (equal plain passwords are refused at start).
+ */
+export async function checkPassword(given: string, env: Credentials): Promise<Role | 'both' | null> {
   if (!given) return null;
-  const admin = same(given, env.adminPassword);
-  const viewer = env.viewerPassword !== null && same(given, env.viewerPassword);
+  const [admin, viewer] = await Promise.all([matches(given, env.admin), env.viewer ? matches(given, env.viewer) : false]);
+  if (admin && viewer) return 'both';
   return admin ? 'admin' : viewer ? 'viewer' : null;
 }

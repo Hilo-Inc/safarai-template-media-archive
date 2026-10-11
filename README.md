@@ -9,7 +9,7 @@ A self-hosted home for your photos, videos and music. Your posts are kept in you
 
 ## Launch on Safarai
 
-Pick **Media Archive** in the Safarai template gallery. Safarai creates the bucket and writes the storage settings and passwords for you. The admin password is shown in the app's settings.
+Pick **Media Archive** in the Safarai template gallery. Safarai creates the bucket and writes the storage settings and passwords for you. You choose the admin password when you launch, and can change it on the app's page in Safarai.
 
 ## Self-hosting
 
@@ -27,20 +27,28 @@ You need Docker and an S3-compatible bucket (Cloudflare R2, Hetzner Object Stora
    docker run --env-file .env -p 3000:3000 media-archive
    ```
 
-4. Open `http://localhost:3000/admin` and sign in with `ADMIN_PASSWORD`.
+4. Open `http://localhost:3000/admin` and sign in with your admin password.
 
 | Variable | Required | Meaning |
 |---|---|---|
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | yes | The bucket. The key needs read and write access to it. |
 | `S3_REGION` | no | Default `auto`. |
 | `S3_FORCE_PATH_STYLE` | no | `1` for MinIO and similar servers. |
-| `ADMIN_PASSWORD` | yes | Admin sign-in. At least 12 characters. |
+| `ADMIN_PASSWORD` | yes, or the _HASH form | Admin sign-in. At least 12 characters. |
+| `ADMIN_PASSWORD_HASH` | instead of `ADMIN_PASSWORD` | The admin password as a hash (see below). Wins over `ADMIN_PASSWORD`. Safarai sets this one. |
 | `SITE_VISIBILITY` | no | `public` (default) or `password`. Overrides `archive.config.json`. |
-| `VIEWER_PASSWORD` | in password mode | Viewer sign-in. At least 12 characters and different from `ADMIN_PASSWORD`. |
+| `VIEWER_PASSWORD` | in password mode, or the _HASH form | Viewer sign-in. At least 12 characters and different from `ADMIN_PASSWORD`. |
+| `VIEWER_PASSWORD_HASH` | instead of `VIEWER_PASSWORD` | The viewer password as a hash. Wins over `VIEWER_PASSWORD`. |
 | `MEDIA_PUBLIC_URL` | no | Public mode: the address the bucket is served at. Without it, media links are signed. |
 | `SITE_URL` | no | The site's own address, used for the absolute links in the feeds. |
 | `SESSION_SECRET` | no | A fixed cookie secret. |
 | `WORK_DIR` | no | Where files are processed during an import. Default: a folder in the system temp directory. |
+
+To make a hash (PBKDF2-SHA256, the format Safarai uses), run this with your password in place of the example; it stays out of the app's settings:
+
+```sh
+node -e 'const c=require("node:crypto"),s=c.randomBytes(16);console.log(["pbkdf2-sha256",600000,s.toString("base64url"),c.pbkdf2Sync(process.argv[1].normalize("NFC"),s,600000,32,"sha256").toString("base64url")].join("$"))' 'your password here'
+```
 
 ### Feed addresses
 
