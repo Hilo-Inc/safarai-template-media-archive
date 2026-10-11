@@ -8,8 +8,11 @@
   --line: #e3e3e3;
   --tile: #efefef;
   --accent: #0a66ff;
+  /* Fill behind white button text; AA (4.5:1) in both themes. */
+  --accent-fill: #0a66ff;
   --danger: #d0302f;
-  --scrim: rgb(0 0 0 / 0.45);
+  /* Over a white photo, white text on the scrim stays at AA. */
+  --scrim: rgb(0 0 0 / 0.55);
   --fs-xs: 13px;
   --fs-sm: 15px;
   --fs-md: 17px;
@@ -37,6 +40,7 @@
     --line: #262626;
     --tile: #1a1a1a;
     --accent: #4d8dff;
+    --accent-fill: #1f66e5;
     --danger: #ff6b6b;
     --scrim: rgb(0 0 0 / 0.55);
   }
@@ -57,7 +61,7 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 0 var(--sp-8); }
 .icon { flex: none; }
 
 /* A button-styled link or button. */
-.button { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 40px; padding: 0 var(--sp-4); border: 1px solid var(--accent); border-radius: var(--r-sm); background: var(--accent); color: #fff; font-weight: 600; text-decoration: none; cursor: pointer; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 40px; padding: 0 var(--sp-4); border: 1px solid var(--accent-fill); border-radius: var(--r-sm); background: var(--accent-fill); color: #fff; font-weight: 600; text-decoration: none; cursor: pointer; }
 .button.secondary { background: transparent; color: var(--fg); border-color: var(--line); }
 .button:disabled { opacity: 0.5; cursor: default; }
 
@@ -75,7 +79,7 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 0 var(--sp-8); }
 .form-ui :is(input:not([type='checkbox'], [type='file']), select, textarea) { font: inherit; font-size: var(--fs-sm); min-height: 40px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); }
 .form-ui textarea { min-height: 6rem; resize: vertical; }
 .form-ui button:not(.button, [class*='carousel']) { min-height: 40px; padding: 0 var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); cursor: pointer; }
-.form-ui button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.form-ui button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
 .form-ui button:disabled { opacity: 0.5; cursor: default; }
 .form-ui .error { color: var(--danger); }
 .form-ui .notice { border-left: 3px solid var(--accent); padding: var(--sp-2) var(--sp-3); background: var(--tile); border-radius: 0 var(--r-sm) var(--r-sm) 0; }

@@ -69,8 +69,12 @@ const size = compact ? 32 : 150;
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') for (const menu of document.querySelectorAll<HTMLDetailsElement>('[data-menu][open]')) menu.open = false;
   });
-  // Keep the current tab in view when the bar scrolls sideways.
-  document.querySelector('.kinds [aria-current="page"]')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  // Keep the current tab in view when the bar scrolls sideways. Scroll the bar itself: scrollIntoView would move the
+  // browser's Tab starting point to the current tab, so the first Tab would skip the header. (.kinds is sticky, so it is
+  // the tab's offsetParent.)
+  const kinds = document.querySelector<HTMLElement>('.kinds');
+  const currentTab = kinds?.querySelector<HTMLElement>('[aria-current="page"]');
+  if (kinds && currentTab) kinds.scrollLeft = Math.max(0, currentTab.offsetLeft + currentTab.offsetWidth - kinds.clientWidth + 16);
 </script>
 
 <style>
