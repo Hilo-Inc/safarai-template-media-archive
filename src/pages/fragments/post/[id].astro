@@ -1,0 +1,15 @@
+---
+import Post from '../../../components/Post.astro';
+import { loadChrome, loadPost, pageDeps, postTitle } from '../../../server/pages';
+
+export const partial = true;
+
+const deps = pageDeps();
+const [chrome, post] = await Promise.all([loadChrome(deps), loadPost(Astro.params.id ?? '', Astro.locals.role, deps)]);
+// An empty string, not null: Astro replaces a page's body-less 404 with the 404 page.
+if (!post) return new Response('', { status: 404, headers: { 'cache-control': 'private, no-store' } });
+Astro.response.headers.set('cache-control', 'private, no-store');
+// Header values must be ASCII; the viewer decodes it.
+Astro.response.headers.set('x-title', encodeURIComponent(postTitle(post, chrome.site.title)));
+---
+<Post post={post} mentions={deps.config.mentions} identity={{ title: chrome.site.title, avatarUrl: chrome.avatarUrl }} />

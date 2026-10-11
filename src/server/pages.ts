@@ -6,6 +6,7 @@ import { readJson } from '../lib/json-cache';
 import { keys } from '../lib/keys';
 import { defaultSigner, signJsonPaths, type UrlSigner } from '../lib/media-url';
 import type { Role } from '../lib/session';
+import { firstLine } from '../render/caption';
 import { KIND_LABELS, kindTabs, presetLook, type Look } from '../render/preset-look';
 import type { IndexMeta, IndexPage } from '../schema/index-types';
 import { POST_ID_RE, postSchema, type Post } from '../schema/post';
@@ -122,4 +123,18 @@ export function ogImage(post: Post, deps: PageDeps): string | null {
 /** An absolute URL on the site's own address (from env), or null when that is unknown. Never built from the request's Host header. */
 export function absoluteUrl(siteUrl: string | null, path: string): string | null {
   return siteUrl ? `${siteUrl.replace(/\/+$/, '')}${path}` : null;
+}
+
+/** The document title for a post: its caption's first line and the site title, or the site title alone. */
+export function postTitle(post: Post, siteTitle: string): string {
+  const line = firstLine(post.caption, 60);
+  return line ? `${line} · ${siteTitle}` : siteTitle;
+}
+
+const MORE_POSTS = 12;
+
+/** "More posts" under a post page: other posts from the first page of the whole archive, as a one-page grid. */
+export function morePosts(page: IndexPage | null, id: string): IndexPage | null {
+  const posts = (page?.posts ?? []).filter((p) => p.id !== id).slice(0, MORE_POSTS);
+  return posts.length > 0 ? { page: 1, pages: 1, posts } : null;
 }

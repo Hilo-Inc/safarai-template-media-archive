@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveConfig } from '../config/load';
 import type { IndexPage } from '../schema/index-types';
 import { makePost, samplePost } from '../../test/fixtures/posts';
-import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, ogImage, parsePage, scopeFromParam, tagPostCount, type PageDeps } from './pages';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, morePosts, ogImage, parsePage, scopeFromParam, postTitle, tagPostCount, type PageDeps } from './pages';
 
 const config = resolveConfig({}, {});
 const sign = async (src: string) => `https://media.example/${src}`;
@@ -167,5 +167,31 @@ describe('tagPostCount', () => {
   it('counts a tag that fits on one page, and gives no number for a longer one', () => {
     expect(tagPostCount({ page: 1, pages: 1, posts: posts(4) })).toBe(4);
     expect(tagPostCount({ page: 1, pages: 3, posts: posts(48) })).toBeNull();
+  });
+});
+
+describe('postTitle', () => {
+  it("uses the caption's first line, and the site title alone without a caption", () => {
+    expect(postTitle({ ...samplePost, caption: 'Beach day #summer\nmore' }, 'Site')).toBe('Beach day #summer · Site');
+    expect(postTitle({ ...samplePost, caption: '' }, 'Site')).toBe('Site');
+    expect(postTitle({ ...samplePost, caption: '   \n  ' }, 'Site')).toBe('Site');
+    expect(postTitle({ ...samplePost, caption: 'x'.repeat(100) }, 'Site')).toBe(`${'x'.repeat(59)}… · Site`);
+  });
+});
+
+describe('morePosts', () => {
+  const summaryOf = (i: number) => ({ id: `files_${i}`, kind: 'post' as const, platform: 'files', published: '2025-01-01T00:00:00.000Z', caption: '', cover: null, count: 1, duration: null, featured: false });
+  const page = (n: number): IndexPage => ({ page: 1, pages: 2, posts: Array.from({ length: n }, (_, i) => summaryOf(i)) });
+
+  it('gives up to 12 other posts as a single page, without the current one', () => {
+    const more = morePosts(page(20), 'files_3')!;
+    expect(more.posts).toHaveLength(12);
+    expect(more.posts.map((p) => p.id)).not.toContain('files_3');
+    expect(more).toMatchObject({ page: 1, pages: 1 });
+  });
+
+  it('is null when there is nothing else to show', () => {
+    expect(morePosts(page(1), 'files_0')).toBeNull();
+    expect(morePosts(null, 'files_0')).toBeNull();
   });
 });

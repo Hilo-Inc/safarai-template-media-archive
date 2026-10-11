@@ -1,17 +1,22 @@
 ---
+import Grid from '../../components/Grid.astro';
 import Header from '../../components/Header.astro';
 import Layout from '../../components/Layout.astro';
+import Missing from '../../components/Missing.astro';
 import Post from '../../components/Post.astro';
 import { firstLine } from '../../render/caption';
 import { getEnv } from '../../env';
-import { absoluteUrl, loadChrome, loadPost, ogImage, pageDeps } from '../../server/pages';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, morePosts, ogImage, pageDeps, postTitle } from '../../server/pages';
 
 const deps = pageDeps();
 const role = Astro.locals.role;
-const [chrome, post] = await Promise.all([loadChrome(deps), loadPost(Astro.params.id ?? '', role, deps)]);
+const all = gridScope('all', undefined, deps.config)!;
+const id = Astro.params.id ?? '';
+const [chrome, post, first] = await Promise.all([loadChrome(deps), loadPost(id, role, deps), loadGrid(all, 1, deps)]);
 if (!post) Astro.response.status = 404;
 const summary = post ? firstLine(post.caption, 160) : '';
-const title = summary ? `${firstLine(summary, 60)} · ${chrome.site.title}` : chrome.site.title;
+const title = post ? postTitle(post, chrome.site.title) : chrome.site.title;
+const more = post ? morePosts(first, post.id) : null;
 ---
 <Layout
   title={title}
@@ -20,12 +25,25 @@ const title = summary ? `${firstLine(summary, 60)} · ${chrome.site.title}` : ch
   og={post ? { title, description: summary, url: absoluteUrl(getEnv().siteUrl, Astro.url.pathname), image: ogImage(post, deps) } : null}
 >
   <main>
-    <Header chrome={chrome} current={null} role={role} />
-    {post ? <Post post={post} mentions={deps.config.mentions} /> : <p class="missing">This post isn't here.</p>}
+    <Header chrome={chrome} current={null} role={role} compact />
+    {post ? (
+      <>
+        <a class="back" href="/">← All posts</a>
+        <Post post={post} mentions={deps.config.mentions} identity={{ title: chrome.site.title, avatarUrl: chrome.avatarUrl }} />
+        {more && (
+          <section class="more" aria-labelledby="more-posts">
+            <h2 id="more-posts">More posts</h2>
+            <Grid page={more} scope={all} look={chrome.look} isOwner={false} />
+          </section>
+        )}
+      </>
+    ) : <Missing message="This post isn't here." />}
   </main>
 </Layout>
 
 <style>
-  .missing { text-align: center; padding: 4rem 1rem; color: var(--muted); }
-  main :global(.post) { margin-top: 1.5rem; }
+  .back { display: inline-block; margin: var(--sp-3) var(--sp-4); color: var(--accent); text-decoration: none; font-weight: 600; font-size: var(--fs-sm); }
+  .more { margin-top: var(--sp-7); border-top: 1px solid var(--line); padding-top: var(--sp-5); }
+  .more h2 { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); padding: 0 var(--sp-4) var(--sp-3); }
+  @media (min-width: 900px) { main :global(.post) { padding: 0 var(--sp-4); } }
 </style>

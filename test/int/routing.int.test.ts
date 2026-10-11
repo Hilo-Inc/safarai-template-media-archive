@@ -136,7 +136,7 @@ function expectRefused(reply: Reply, path: string): void {
 }
 
 let store: Store;
-const seeded = [keys.site, keys.post('files_hidden')];
+const seeded = [keys.site, keys.post('files_hidden'), keys.post('files_shown')];
 let builtOk = false;
 
 beforeAll(async () => {
@@ -152,6 +152,7 @@ beforeAll(async () => {
   });
   await store.putJson(keys.site, { title: 'SECRET-SITE-TITLE' });
   await store.putJson(keys.post('files_hidden'), makePost('files_hidden', '2025-01-01T00:00:00.000Z', { hidden: true }));
+  await store.putJson(keys.post('files_shown'), makePost('files_shown', '2025-01-02T00:00:00.000Z'));
 }, 600_000);
 
 afterAll(async () => {
@@ -174,6 +175,26 @@ describe.each(['public', 'password'] as const)('routing in %s mode', (mode) => {
 
   const origin = () => ({ origin: `http://127.0.0.1:${server.port}`, host: `127.0.0.1:${server.port}`, 'content-type': 'application/json' });
   const get = (path: string, cookie?: string) => raw(server.port, 'GET', path, cookie ? { cookie } : {});
+
+  it('serves post fragments by the same rules as post pages', async () => {
+    const anonymous = await get('/fragments/post/files_shown');
+    if (mode === 'password') {
+      expectRefused(anonymous, '/fragments/post/files_shown');
+    } else {
+      expect(anonymous.status).toBe(200);
+      expect(anonymous.body).toContain('class="post');
+      expect(anonymous.body).not.toContain('<html');
+      expect(anonymous.headers['cache-control']).toBe('private, no-store');
+      expect(decodeURIComponent(String(anonymous.headers['x-title']))).toBe('Beach day #summer · SECRET-SITE-TITLE');
+    }
+    // A visitor (anonymous in public mode, the viewer in password mode) never sees a hidden post; the owner does.
+    const visitor = viewer ?? undefined;
+    const hidden = await get('/fragments/post/files_hidden', visitor);
+    expect(hidden.status).toBe(404);
+    expect(hidden.body).toBe('');
+    expect((await get('/fragments/post/files_hidden', admin)).status).toBe(200);
+    expect((await get('/fragments/post/files_missing', admin)).status).toBe(404);
+  });
 
   it('sanity: the admin cookie reaches the admin pages and API (so the refusals below are not vacuous)', async () => {
     expect((await get('/admin', admin)).status).toBe(200);
