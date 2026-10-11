@@ -16,27 +16,22 @@ const links = [
 ] as const;
 ---
 <Layout title={`${title} · Admin`} visibility={loadConfig().visibility} admin>
-  <main class="admin">
-    <nav class="admin-nav" aria-label="Admin">
+  <main class="admin form-ui">
+    <nav class="tabbar admin-nav" aria-label="Admin">
       {links.map(([href, label]) => <a href={href} aria-current={href === current ? 'page' : undefined}>{label}</a>)}
       <a class="view" href="/">View site</a>
     </nav>
-    <h1>{title}</h1>
-    <slot />
+    <div class="admin-body">
+      <h1>{title}</h1>
+      <slot />
+    </div>
   </main>
 </Layout>
 
 <style>
-  .admin { padding: 1rem; }
-  .admin-nav { display: flex; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--line); padding-bottom: 0.75rem; }
-  .admin-nav a { text-decoration: none; color: var(--muted); }
-  .admin-nav a[aria-current='page'] { color: var(--fg); font-weight: 600; }
-  .admin-nav .view { margin-left: auto; }
-  h1 { font-size: 1.4rem; }
-  .admin :global(button) { padding: 0.4rem 0.9rem; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 0.3rem; cursor: pointer; }
-  .admin :global(button.primary) { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .admin :global(button:disabled) { opacity: 0.5; cursor: default; }
-  .admin :global(.error) { color: var(--danger); }
-  .admin :global(.notice) { border-left: 3px solid var(--accent); padding: 0.5rem 0.75rem; background: var(--tile); }
-  .admin :global(input), .admin :global(textarea), .admin :global(select) { font: inherit; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 0.3rem; background: var(--bg); color: var(--fg); }
+  .admin-nav { position: sticky; top: 0; z-index: 10; }
+  .admin-nav .view { margin-left: auto; color: var(--accent); }
+  .admin-body { display: grid; gap: var(--sp-4); padding: var(--sp-5) var(--sp-4); }
+  h1 { font-size: var(--fs-lg); }
+  .admin-body :global(h2) { font-size: var(--fs-md); margin: var(--sp-4) 0 0; }
 </style>

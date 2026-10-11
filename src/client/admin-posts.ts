@@ -15,8 +15,8 @@ const rows: Row[] = [...list.querySelectorAll<HTMLElement>(':scope > li')].map((
 const byId = new Map(rows.map((r) => [r.id, r]));
 const count = document.querySelector<HTMLElement>('[data-count]')!;
 
-/** Saves one field. Marks the element while saving; on failure shows the error and calls `revert`. */
-async function save(li: HTMLElement, el: HTMLElement, patch: Record<string, unknown>, revert: () => void, confirm: () => void = () => undefined): Promise<Post | null> {
+/** Saves one field. Marks the element while saving; on failure shows the error, calls `revert`, and returns the message. */
+async function save(li: HTMLElement, el: HTMLElement, patch: Record<string, unknown>, revert: () => void, confirm: () => void = () => undefined): Promise<Post | string> {
   const error = li.querySelector<HTMLElement>('[data-error]')!;
   error.textContent = '';
   el.classList.add('saving');
@@ -26,8 +26,9 @@ async function save(li: HTMLElement, el: HTMLElement, patch: Record<string, unkn
     return post;
   } catch (e) {
     revert();
-    error.textContent = (e as Error).message;
-    return null;
+    const message = (e as Error).message;
+    error.textContent = message;
+    return message;
   } finally {
     el.classList.remove('saving');
   }
@@ -37,18 +38,29 @@ for (const box of list.querySelectorAll<HTMLInputElement>('input[type="checkbox"
   box.addEventListener('change', async () => {
     const li = box.closest('li')!;
     const field = box.dataset.field as 'hidden' | 'featured';
-    const post = await save(li, box, { [field]: box.checked }, () => (box.checked = !box.checked));
-    if (post) byId.get(li.dataset.id!)![field] = box.checked;
+    const result = await save(li, box, { [field]: box.checked }, () => (box.checked = !box.checked));
+    if (typeof result !== 'string') byId.get(li.dataset.id!)![field] = box.checked;
   });
 }
 
-function textField(label: string, value: string, multiline: boolean, maxLength: number, onSave: (value: string, el: HTMLElement, revert: () => void, confirm: () => void) => void): HTMLLabelElement {
+type SaveField = (value: string, el: HTMLElement, revert: () => void, confirm: () => void) => Promise<Post | string>;
+
+function textField(label: string, value: string, multiline: boolean, maxLength: number, onSave: SaveField): HTMLLabelElement {
   const wrap = document.createElement('label');
-  wrap.style.display = 'grid';
   wrap.append(label);
   const input = multiline ? document.createElement('textarea') : document.createElement('input');
   input.value = value;
   input.maxLength = maxLength;
+  const status = document.createElement('span');
+  status.className = 'save-status';
+  status.setAttribute('aria-live', 'polite');
+  let fade: ReturnType<typeof setTimeout> | undefined;
+  const show = (text: string, isError = false) => {
+    clearTimeout(fade);
+    status.textContent = text;
+    status.classList.toggle('error', isError);
+    status.classList.remove('faded');
+  };
   const saved = new SavedValue(value);
   input.addEventListener('blur', () => {
     const attempt = saved.begin(input.value);
@@ -58,9 +70,17 @@ function textField(label: string, value: string, multiline: boolean, maxLength: 
       // Only put the saved text back if the user has not typed something else since.
       if (input.value === attempt.next) input.value = kept;
     };
-    onSave(attempt.next, input, revert, attempt.confirm);
+    show('Saving…');
+    void onSave(attempt.next, input, revert, attempt.confirm).then((result) => {
+      if (typeof result === 'string') {
+        show(result, true);
+        return;
+      }
+      show('Saved');
+      fade = setTimeout(() => status.classList.add('faded'), 2000);
+    });
   });
-  wrap.append(input);
+  wrap.append(input, status);
   return wrap;
 }
 
@@ -78,22 +98,22 @@ for (const button of list.querySelectorAll<HTMLButtonElement>('[data-edit]')) {
       return;
     }
     const fields = document.createElement('div');
-    fields.style.display = 'grid';
-    fields.style.gap = '0.4rem';
+    fields.className = 'fields';
     fields.append(
-      textField('Caption', post.caption, true, CAPTION_MAX, (caption, el, revert, confirm) => {
+      textField('Caption', post.caption, true, CAPTION_MAX, (caption, el, revert, confirm) =>
         // The search filter looks at captions, so keep its copy current.
-        void save(li, el, { caption }, revert, confirm).then((saved) => {
-          if (saved) byId.get(li.dataset.id!)!.caption = caption;
-        });
-      }),
+        save(li, el, { caption }, revert, confirm).then((result) => {
+          if (typeof result !== 'string') byId.get(li.dataset.id!)!.caption = caption;
+          return result;
+        }),
+      ),
       textField('Place', post.location && 'name' in post.location ? (post.location.name ?? '') : '', false, PLACE_MAX, (place, el, revert, confirm) =>
-        void save(li, el, { place: place.trim() || null }, revert, confirm),
+        save(li, el, { place: place.trim() || null }, revert, confirm),
       ),
     );
     post.media.forEach((item, i) => {
       if (item.type !== 'image') return;
-      fields.append(textField(`Alt text, image ${i + 1}`, item.alt ?? '', false, ALT_MAX, (alt, el, revert, confirm) => void save(li, el, { alt: { [String(i)]: alt.trim() || null } }, revert, confirm)));
+      fields.append(textField(`Alt text, image ${i + 1}`, item.alt ?? '', false, ALT_MAX, (alt, el, revert, confirm) => save(li, el, { alt: { [String(i)]: alt.trim() || null } }, revert, confirm)));
     });
     button.replaceWith(fields);
   });
