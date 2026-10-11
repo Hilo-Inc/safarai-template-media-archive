@@ -13,3 +13,30 @@ services:
       S3_ACCESS_KEY_ID: test
       S3_SECRET_ACCESS_KEY: test
       S3_FORCE_PATH_STYLE: "1"
+  # Local demo (npm run demo): the app with generated placeholder posts. Not used by the tests.
+  demo-s3:
+    profiles: [demo]
+    image: adobe/s3mock:5.2
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: archive-demo
+    ports: ["9090:9090"]
+  demo-app:
+    profiles: [demo]
+    build: { context: ., target: runtime }
+    env_file: demo.env
+    depends_on: [demo-s3]
+    ports: ["3000:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  demo-seed:
+    profiles: [demo]
+    build: { context: ., target: test }
+    env_file: demo.env
+    environment:
+      DEMO_APP_URL: http://demo-app:3000
+    depends_on:
+      demo-app: { condition: service_healthy }
+    command: ["npm", "run", "demo:seed"]

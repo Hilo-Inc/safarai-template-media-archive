@@ -96,6 +96,17 @@ npm run sample-export -- sample-export   # a generated export for trying the imp
 
 Needs `ffmpeg`, `ffprobe` and `exiftool` on your PATH for processing and for the tests. The sample export needs `ffmpeg`; without `exiftool` its photos simply carry no GPS tag.
 
+## Try the demo
+
+See the template with placeholder posts on your own computer. You need Docker.
+
+    npm run demo        # builds and starts it, fills it on first run, prints the address
+    npm run demo:down   # stops it and deletes the demo content
+
+Open http://localhost:3000. To try the admin, sign in at http://localhost:3000/login with the demo
+password that `npm run demo` prints (it is in `demo.env` and works only on your computer). Uploading
+files from the admin's Import page does not work in the demo; everything else does.
+
 ## License
 
 MIT
