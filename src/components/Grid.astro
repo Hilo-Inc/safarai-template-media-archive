@@ -3,6 +3,7 @@ import type { Look } from '../render/preset-look';
 import type { IndexPage } from '../schema/index-types';
 import type { GridScope } from '../server/pages';
 import Tile from './Tile.astro';
+import Viewer from './Viewer.astro';
 
 interface Props {
   page: IndexPage;
@@ -32,10 +33,13 @@ const sep = scope.basePath.includes('?') ? '&' : '?';
     {isOwner && <a class="button" href="/admin">Import your files</a>}
   </div>
 ) : (
-  <section class:list={['grid', look.tile]} data-grid style={`--cols: ${look.columns}; --desktop: ${desktop}`}>
-    {page.posts.map((post) => <Tile post={post} look={look} />)}
-    {next && <a class="more" data-more href={`${scope.basePath}${sep}page=${next}`} data-fragment={fragmentUrl}>More</a>}
-  </section>
+  <>
+    <section class:list={['grid', look.tile]} data-grid style={`--cols: ${look.columns}; --desktop: ${desktop}`}>
+      {page.posts.map((post) => <Tile post={post} look={look} />)}
+      {next && <a class="more" data-more href={`${scope.basePath}${sep}page=${next}`} data-fragment={fragmentUrl}>More</a>}
+    </section>
+    <Viewer />
+  </>
 )}
 
 <script>
