@@ -5,8 +5,8 @@ import { parsePasswordHash, verifyPassword, verifyPasswordSync } from './passwor
 const SALT = 'AAECAwQFBgcICQoLDA0ODw';
 const ASCII = { password: 'correct horse battery staple', hash: `pbkdf2-sha256$600000$${SALT}$7xdxRO7JQgy8EJPSqLNEqSvFBtDU7JwCjdGfgyTYweY` };
 const UNICODE = {
-  nfc: 'pässwörd \u{1F511} lång',
-  nfd: 'pässwörd \u{1F511} lång',
+  nfc: 'p\u00e4ssw\u00f6rd \u{1F511} l\u00e5ng',
+  nfd: 'pa\u0308ssw\u006f\u0308rd \u{1F511} la\u030ang',
   hash: `pbkdf2-sha256$600000$${SALT}$uItD2LEIk3VCFQeA8KteV8qxESPX_gqQ1ASzK1ilxF8`,
 };
 
@@ -45,6 +45,7 @@ describe('verifyPassword', () => {
 
   it('accepts a non-ASCII password typed composed or decomposed', async () => {
     const hash = parsePasswordHash(UNICODE.hash)!;
+    expect(UNICODE.nfc).not.toBe(UNICODE.nfd);
     expect(await verifyPassword(UNICODE.nfc, hash)).toBe(true);
     expect(await verifyPassword(UNICODE.nfd, hash)).toBe(true);
   });
