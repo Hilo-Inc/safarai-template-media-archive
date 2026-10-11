@@ -1,9 +1,13 @@
 ---
+import '../styles/base.css';
 import { readJson } from '../lib/json-cache';
+import { mediaUrl } from '../lib/media-url';
 import { readSite } from '../server/pages';
 
 const next = Astro.url.searchParams.get('next') ?? '/';
-const { title } = await readSite(readJson).catch(() => ({ title: 'Archive' }));
+const site = await readSite(readJson).catch(() => null);
+const title = site?.title ?? 'Archive';
+const avatarUrl = site?.avatar ? await mediaUrl(site.avatar).catch(() => null) : null;
 ---
 <!doctype html>
 <html lang="en">
@@ -12,24 +16,15 @@ const { title } = await readSite(readJson).catch(() => ({ title: 'Archive' }));
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>Sign in · {title}</title>
-    <style>
-      :root { color-scheme: light dark; --bg: #fafafa; --fg: #111; --muted: #666; --line: #ddd; --accent: #0a66ff; }
-      @media (prefers-color-scheme: dark) { :root { --bg: #0e0e0e; --fg: #eee; --muted: #999; --line: #333; } }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
-      form { width: min(22rem, calc(100vw - 2rem)); display: grid; gap: 0.75rem; }
-      input, button { font: inherit; padding: 0.7rem 0.8rem; border-radius: 0.5rem; border: 1px solid var(--line); background: transparent; color: inherit; }
-      button { background: var(--accent); color: #fff; border: 0; cursor: pointer; }
-      p[role='alert'] { color: #d33; margin: 0; min-height: 1.5em; }
-    </style>
   </head>
   <body>
-    <form id="login" data-next={next}>
+    <form id="login" class="card form-ui" data-next={next}>
+      {avatarUrl ? <img class="avatar" src={avatarUrl} alt="" width="64" height="64" /> : <span class="avatar" aria-hidden="true"></span>}
       <h1>{title}</h1>
-      <p>Sign in to continue.</p>
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus />
-      <button type="submit">Sign in</button>
-      <p role="alert" id="error"></p>
+      <p class="lead">Sign in to continue</p>
+      <label>Password <input id="password" name="password" type="password" autocomplete="current-password" required autofocus /></label>
+      <button type="submit" class="button">Sign in</button>
+      <p role="alert" id="error" class="error"></p>
     </form>
     <script>
       const form = document.getElementById('login') as HTMLFormElement;
@@ -50,3 +45,13 @@ const { title } = await readSite(readJson).catch(() => ({ title: 'Archive' }));
     </script>
   </body>
 </html>
+
+<style>
+  body { min-height: 100dvh; display: grid; place-items: center; padding: var(--sp-4); }
+  .card { width: min(360px, 100%); display: grid; gap: var(--sp-3); justify-items: center; padding: var(--sp-5); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+  .avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--tile); }
+  h1 { font-size: var(--fs-lg); }
+  .lead { color: var(--muted); margin-bottom: var(--sp-2); }
+  label, .button { width: 100%; }
+  .error { min-height: 1.45em; font-size: var(--fs-sm); }
+</style>

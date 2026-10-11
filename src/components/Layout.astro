@@ -1,5 +1,6 @@
 ---
 import type { Visibility } from '../config/schema';
+import '../styles/base.css';
 
 interface Props {
   title: string;
@@ -44,14 +45,3 @@ const noindex = visibility !== 'public' || admin;
   </body>
 </html>
 
-<style is:global>
-  :root { color-scheme: light dark; --bg: #fafafa; --fg: #111; --muted: #666; --line: #ddd; --tile: #e8e8e8; --accent: #0a66ff; --danger: #d33; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0e0e0e; --fg: #eee; --muted: #999; --line: #2a2a2a; --tile: #1c1c1c; } }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
-  a { color: inherit; }
-  main { max-width: 935px; margin: 0 auto; padding: 0 0 4rem; }
-  img, video { max-width: 100%; display: block; }
-  button { font: inherit; }
-  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-</style>

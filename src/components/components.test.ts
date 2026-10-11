@@ -5,6 +5,7 @@ import type { IndexPage, PostSummary } from '../schema/index-types';
 import type { MediaItem as Item } from '../schema/post';
 import { samplePost } from '../../test/fixtures/posts';
 import Grid from './Grid.astro';
+import Icon from './Icon.astro';
 import MediaItem from './MediaItem.astro';
 import Post from './Post.astro';
 import Tile from './Tile.astro';
@@ -124,5 +125,13 @@ describe('Grid', () => {
     const empty = await container.renderToString(Grid, { props: { page: { page: 1, pages: 1, posts: [] }, scope, look: presetLook('generic'), isOwner: true } });
     expect(empty).toContain('Nothing here yet');
     expect(empty).toContain('href="/admin"');
+  });
+});
+
+describe('Icon', () => {
+  it.each(['carousel', 'play', 'pin', 'close', 'prev', 'next', 'more', 'audio'] as const)('%s is a hidden 24px-grid SVG', async (name) => {
+    const html = await container.renderToString(Icon, { props: { name } });
+    expect(html).toMatch(/^<svg class="icon"[^>]*viewBox="0 0 24 24"[^>]*aria-hidden="true"/);
+    expect(html).toMatch(/<(path|rect|circle) /);
   });
 });
