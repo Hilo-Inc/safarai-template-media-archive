@@ -1,12 +1,10 @@
 import { z } from 'zod';
+import { MAX_TEXT_BYTES } from '../importers/text';
 import type { ImportFiles, ListingEntry } from '../importers/types';
 import { ImportError } from './errors';
 import { keys } from '../lib/keys';
 import { PRIVATE_JSON } from '../lib/site';
 import type { Store } from '../lib/store';
-
-/** Sidecar JSON and subtitles are small; anything bigger is not read as text. */
-export const MAX_TEXT_BYTES = 5 * 1024 * 1024;
 
 export interface Manifest {
   id: string;
