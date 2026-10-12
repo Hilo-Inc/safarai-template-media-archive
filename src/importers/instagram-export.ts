@@ -213,7 +213,8 @@ function labels(root: unknown): Map<string, string> {
 /** Media objects under a "Media" label, at any depth. */
 function labelledMedia(root: unknown): unknown[] {
   const out: unknown[] = [];
-  for (const v of walk(root)) if (isObj(v) && v.label === 'Media' && Array.isArray(v.media)) out.push(...v.media);
+  // A loop, not push(...media): a huge array would overflow the call stack.
+  for (const v of walk(root)) if (isObj(v) && v.label === 'Media' && Array.isArray(v.media)) for (const m of v.media) out.push(m);
   return out;
 }
 

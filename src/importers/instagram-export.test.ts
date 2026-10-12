@@ -136,6 +136,12 @@ describe('hostile exports never fail the parse', () => {
     expect((await parseExport(only('posts', rec))).locations.size).toBe(0);
   });
 
+  it('survives a labelled media array too large to spread into a call', async () => {
+    const media = Array.from({ length: 200_000 }, () => ({ uri: 'media/a.jpg' }));
+    const parsed = await parseExport(only('posts', [{ label_values: [{ label: 'Media', media }, { label: 'Published', value: 'False' }] }]));
+    expect(parsed.drafts).toEqual(new Set(['media/a.jpg']));
+  });
+
   it('ignores profile photos without a timestamp', async () => {
     const photos = { ig_profile_picture: [{ uri: 'media/none.jpg' }, { uri: 'media/old.jpg', creation_timestamp: 5 }] };
     expect((await parseExport(only('profile_photos', photos))).avatar).toBe('media/old.jpg');
