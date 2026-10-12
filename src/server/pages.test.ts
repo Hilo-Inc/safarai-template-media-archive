@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveConfig } from '../config/load';
 import type { IndexPage } from '../schema/index-types';
 import { makePost, samplePost } from '../../test/fixtures/posts';
-import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, morePosts, ogImage, parsePage, scopeFromParam, postTitle, tagPostCount, type PageDeps } from './pages';
+import { absoluteUrl, gridScope, loadChrome, loadGrid, loadPost, loadStoryMonth, morePosts, ogImage, parsePage, scopeFromParam, postTitle, tagPostCount, type PageDeps } from './pages';
 
 const config = resolveConfig({}, {});
 const sign = async (src: string) => `https://media.example/${src}`;
@@ -117,6 +117,30 @@ describe('loadChrome', () => {
     expect(chrome.site.title).toBe('Ours');
     expect(chrome.avatarUrl).toBe('https://media.example/media/site/avatar-x.webp');
     expect(chrome.look.tile).toBe('square');
+  });
+});
+
+describe('loadChrome stories flag', () => {
+  const withMonths = { 'index/meta.json': { storyMonths: ['2024-01'], counts: { all: 0, platforms: {}, kinds: {} } } };
+  it('is true only with story in kinds and a non-empty storyMonths', async () => {
+    expect((await loadChrome(deps(withMonths))).stories).toBe(true);
+    expect((await loadChrome(deps(withMonths, { config: resolveConfig({ kinds: ['post'] }, {}) }))).stories).toBe(false);
+    expect((await loadChrome(deps({ 'index/meta.json': { storyMonths: [], counts: { all: 0, platforms: {}, kinds: {} } } }))).stories).toBe(false);
+    expect((await loadChrome(deps({}))).stories).toBe(false);
+  });
+});
+
+describe('loadStoryMonth', () => {
+  const meta = { storyMonths: ['2024-01'], counts: { all: 0, platforms: {}, kinds: {} } };
+  const month = { month: '2024-01', posts: [{ id: 'instagram_a', day: 31, cover: { src: 'media/instagram_a/0/orig.jpg' } }] };
+  it('loads a listed month with media signed', async () => {
+    const got = await loadStoryMonth('2024-01', deps({ 'index/meta.json': meta, 'index/stories/2024-01.json': month }));
+    expect(got!.posts[0]!.cover).toMatchObject({ src: 'https://media.example/media/instagram_a/0/orig.jpg' });
+  });
+  it('is null for an unlisted or malformed month', async () => {
+    const d = deps({ 'index/meta.json': meta, 'index/stories/2024-02.json': month });
+    expect(await loadStoryMonth('2024-02', d)).toBeNull();
+    expect(await loadStoryMonth('../x', d)).toBeNull();
   });
 });
 

@@ -7,8 +7,9 @@ import { keys } from '../lib/keys';
 import { defaultSigner, signJsonPaths, type UrlSigner } from '../lib/media-url';
 import type { Role } from '../lib/session';
 import { firstLine } from '../render/caption';
+import { MONTH_RE } from '../render/stories';
 import { KIND_LABELS, kindTabs, presetLook, type Look } from '../render/preset-look';
-import type { IndexMeta, IndexPage } from '../schema/index-types';
+import type { IndexMeta, IndexPage, StoryMonth } from '../schema/index-types';
 import { POST_ID_RE, postSchema, type Post } from '../schema/post';
 import { DEFAULT_SITE, siteSchema, type Site } from '../schema/site';
 
@@ -45,6 +46,8 @@ export interface Chrome {
   meta: IndexMeta | null;
   look: Look;
   tabs: { kind: Kind; label: string; count: number }[];
+  /** Whether the Stories tab shows: story is a configured kind and the index lists at least one month. */
+  stories: boolean;
 }
 
 export async function loadChrome(deps: PageDeps): Promise<Chrome> {
@@ -55,6 +58,7 @@ export async function loadChrome(deps: PageDeps): Promise<Chrome> {
     meta,
     look: presetLook(deps.config.preset),
     tabs: kindTabs(deps.config.kinds.filter((k) => k !== 'story'), meta?.counts.kinds ?? {}),
+    stories: deps.config.kinds.includes('story') && (meta?.storyMonths.length ?? 0) > 0,
   };
 }
 
@@ -93,6 +97,15 @@ export async function loadGrid(scope: GridScope, page: number, deps: PageDeps): 
   const data = await readOrNull<IndexPage>(deps.read, keys.indexPage(scope.scope, page));
   if (!data) return scope.scope === 'all' && page === 1 ? { page: 1, pages: 1, posts: [] } : null;
   return signJsonPaths(data, deps.sign);
+}
+
+/** A month of stories for /stories/<YYYY-MM>, with media keys signed; null for a month the index doesn't list. */
+export async function loadStoryMonth(month: string, deps: PageDeps): Promise<StoryMonth | null> {
+  if (!MONTH_RE.test(month)) return null;
+  const meta = await readOrNull<IndexMeta>(deps.read, keys.indexMeta);
+  if (!meta?.storyMonths.includes(month)) return null;
+  const value = await readOrNull<StoryMonth>(deps.read, keys.storyMonth(month));
+  return value ? signJsonPaths(value, deps.sign) : null;
 }
 
 /** A tag page's post count, when the whole tag fits on one page (the index stores page counts, not post counts). */

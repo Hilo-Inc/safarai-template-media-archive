@@ -44,7 +44,7 @@ const size = compact ? 32 : 150;
     </details>
   )}
 </header>
-{!compact && tabs.length > 0 && (
+{!compact && (tabs.length > 0 || chrome.stories) && (
   <nav class="tabbar kinds" aria-label="Kinds">
     <a href="/" aria-current={current === '/' ? 'page' : undefined}>All</a>
     {tabs.map((t) => (
@@ -52,6 +52,11 @@ const size = compact ? 32 : 150;
         {t.label}<span class="n">{formatCount(t.count)}</span>
       </a>
     ))}
+    {chrome.stories && (
+      <a href="/stories" aria-current={current?.startsWith('/stories') ? 'page' : undefined}>
+        Stories<span class="n">{formatCount(meta?.counts.kinds.story ?? 0)}</span>
+      </a>
+    )}
   </nav>
 )}
 

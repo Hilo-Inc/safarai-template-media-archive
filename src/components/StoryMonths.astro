@@ -1,0 +1,60 @@
+---
+import { monthLabel, monthsByYear } from '../render/stories';
+
+interface Props {
+  /** Months with stories, oldest first ("YYYY-MM"). */
+  months: string[];
+  counts: Record<string, number>;
+  current: string;
+}
+
+const { months, counts, current } = Astro.props;
+const years = monthsByYear(months, counts);
+const newestFirst = [...months].sort().reverse();
+---
+<nav class="months" aria-label="Months">
+  {years.map((y) => (
+    <>
+      <h2>{y.year}</h2>
+      <ul>
+        {y.months.map((m) => (
+          <li>
+            <a href={`/stories/${m.month}`} aria-current={m.month === current ? 'page' : undefined}>
+              {m.name}{m.count !== null && <span class="n">{m.count}</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </>
+  ))}
+  <label class="month-select">Month
+    <select data-month-select>
+      {newestFirst.map((m) => (
+        <option value={`/stories/${m}`} selected={m === current}>{monthLabel(m)}{counts[m] !== undefined ? ` (${counts[m]})` : ''}</option>
+      ))}
+    </select>
+  </label>
+</nav>
+
+<script>
+  for (const select of document.querySelectorAll<HTMLSelectElement>('[data-month-select]')) {
+    select.addEventListener('change', () => location.assign(select.value));
+  }
+</script>
+
+<style>
+  .months ul, .months h2 { display: none; }
+  .months ul { list-style: none; margin: 0; padding: 0; }
+  .months h2 { font-size: var(--fs-sm); color: var(--muted); margin: var(--sp-3) 0 var(--sp-1); }
+  .months a { display: flex; justify-content: space-between; padding: var(--sp-1) var(--sp-2); text-decoration: none; border-radius: var(--r-sm); }
+  .months a[aria-current='page'] { font-weight: 600; background: var(--tile); }
+  .months .n { color: var(--muted); font-size: var(--fs-xs); }
+  .month-select { display: grid; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--muted); }
+  .month-select select { font: inherit; padding: var(--sp-2); }
+  @media (min-width: 736px) {
+    .months { position: sticky; top: var(--sp-4); align-self: start; }
+    .months ul { display: block; }
+    .months h2 { display: block; }
+    .month-select { display: none; }
+  }
+</style>
