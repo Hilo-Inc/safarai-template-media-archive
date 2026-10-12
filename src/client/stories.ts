@@ -24,10 +24,6 @@ interface MonthIndex {
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
-const root = document.querySelector<HTMLElement>('[data-stories]');
-const dialog = document.querySelector<HTMLDialogElement>('[data-story-viewer]');
-if (root && dialog) setUp(root, dialog);
-
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
@@ -480,3 +476,8 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
     if (at >= 0) open(at, null, false);
   }
 }
+
+// Last, so every helper above is initialised before the viewer uses it.
+const root = document.querySelector<HTMLElement>('[data-stories]');
+const dialog = document.querySelector<HTMLDialogElement>('[data-story-viewer]');
+if (root && dialog) setUp(root, dialog);
