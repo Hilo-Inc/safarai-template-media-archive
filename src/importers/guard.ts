@@ -71,3 +71,22 @@ export function isMetaExport(paths: string[]): boolean {
 
 export const META_REFUSAL =
   'This looks like an Instagram or Facebook export. Its importer arrives in a later update; nothing was uploaded.';
+
+export type MetaExportKind = 'instagram-json' | 'instagram-html' | 'facebook';
+
+/** The Instagram JSON export's media lists, at the listing root or one folder below it (an unzipped part). */
+const INSTAGRAM_JSON = /^(?:[^/]+\/)?your_instagram_activity\/media\/(?:posts_\d+|reels|stories)\.json$/;
+const INSTAGRAM_HTML = /(^|\/)your_instagram_activity\/.*\.html?$/;
+const FACEBOOK = /(^|\/)your_facebook_activity\//;
+
+/** Which Meta export this is, if any. Facebook wins: its exports can carry Instagram folders too. */
+export function metaExportKind(paths: string[]): MetaExportKind | null {
+  const folded = paths.map((p) => segmentsOf(p).join('/'));
+  if (folded.some((p) => FACEBOOK.test(p))) return 'facebook';
+  if (folded.some((p) => INSTAGRAM_JSON.test(p))) return 'instagram-json';
+  if (folded.some((p) => INSTAGRAM_HTML.test(p))) return 'instagram-html';
+  return null;
+}
+
+export const INSTAGRAM_HTML_REFUSAL =
+  'This is the HTML version of the Instagram export. Request it again with Format: JSON (Settings → Accounts Center → Your information and permissions → Export your information). Nothing was uploaded.';

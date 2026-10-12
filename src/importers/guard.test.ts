@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDeniedName, isDeniedPath, isJunkPath, isMetaExport } from './guard';
+import { INSTAGRAM_HTML_REFUSAL, isDeniedName, isDeniedPath, isJunkPath, isMetaExport, metaExportKind } from './guard';
 
 describe('isDeniedPath', () => {
   it('denies private folders at any depth, any case', () => {
@@ -88,5 +88,27 @@ describe('guard hardening round 2', () => {
   it('removes format characters before comparing segments', () => {
     expect(isDeniedPath('messages​/a.jpg')).toBe(true);
     expect(isDeniedPath('me­ssages/a.jpg')).toBe(true);
+  });
+});
+
+describe('metaExportKind', () => {
+  it('finds the Instagram JSON export at the root or one folder down', () => {
+    expect(metaExportKind(['your_instagram_activity/media/posts_1.json', 'media/posts/202401/a.jpg'])).toBe('instagram-json');
+    expect(metaExportKind(['part1/your_instagram_activity/media/stories.json'])).toBe('instagram-json');
+    expect(metaExportKind(['part1/your_instagram_activity/media/reels.json'])).toBe('instagram-json');
+    expect(metaExportKind(['a/b/your_instagram_activity/media/posts_1.json'])).toBeNull();
+  });
+
+  it('tells the HTML export and Facebook apart', () => {
+    expect(metaExportKind(['your_instagram_activity/media/posts_1.html', 'media/posts/a.jpg'])).toBe('instagram-html');
+    expect(metaExportKind(['x/your_facebook_activity/posts/your_posts_1.json', 'your_instagram_activity/media/posts_1.json'])).toBe('facebook');
+    expect(metaExportKind(['videos/a.mp4'])).toBeNull();
+    expect(metaExportKind(['your_instagram_activity/messages/inbox/a/message_1.json'])).toBeNull();
+  });
+
+  it('has the exact HTML refusal text', () => {
+    expect(INSTAGRAM_HTML_REFUSAL).toBe(
+      'This is the HTML version of the Instagram export. Request it again with Format: JSON (Settings → Accounts Center → Your information and permissions → Export your information). Nothing was uploaded.',
+    );
   });
 });
