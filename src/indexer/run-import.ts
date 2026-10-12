@@ -122,8 +122,8 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     await mkdir(deps.workRoot, { recursive: true });
     if (importer.avatar) await importAvatar(importer, listing, deps);
     const done = new Set(status.doneIds);
-    // I5: an upload's files are deleted as soon as every post using them is finished, so storage peaks near the export's
-    // size. A failed post keeps its files for "Retry failed items"; the JSON and the avatar source stay until the end.
+    // I5: an upload's files are deleted as soon as every post using them is done, so storage peaks near the export's
+    // size. A failed or skipped post keeps its files (a retry attempts it again); the JSON and the avatar source stay until the end.
     const pathsOf = (raw: RawPost) => [...new Set(raw.media.flatMap((m) => [m.path, ...(m.subtitles ?? []).map((s) => s.path)]))].filter((p) => selected.has(p));
     const refs = new Map<string, number>();
     if (status.source === 'upload') for (const raw of raws) for (const p of pathsOf(raw)) refs.set(p, (refs.get(p) ?? 0) + 1);
@@ -142,7 +142,7 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     let handled = 0;
     for (const raw of raws) {
       const outcome = await importOne(raw, { ...deps, process, now }, listing, selected, status, done);
-      if (outcome !== 'failed') {
+      if (outcome === 'done') {
         for (const p of pathsOf(raw)) {
           const left = (refs.get(p) ?? 0) - 1;
           refs.set(p, left);

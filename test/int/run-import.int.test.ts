@@ -98,6 +98,7 @@ describe('runImport', () => {
     // The finished post's file is already gone; the failed one's stays for the retry. The manifest still lists both, so ids stay stable.
     expect((await s.list(keys.importPrefix(staged.id))).map((o) => o.key.slice(keys.importPrefix(staged.id).length))).toEqual(['b.jpg']);
     expect((await readManifest(s, staged.id))!.entries.map((e) => e.path)).toEqual(['a.jpg', 'b.jpg']);
+    expect((await readManifest(s, staged.id))!.released).toEqual(['a.jpg']);
 
     await s.putJson(keys.importStatus(staged.id), { ...first, state: 'queued' });
     calls.length = 0;
@@ -117,7 +118,10 @@ describe('runImport', () => {
       const st = await stageImport(s, files);
       await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_f7'])) }).d);
       expect(await left(s, st.id)).toEqual(['f7.jpg']);
-      expect((await readManifest(s, st.id))!.entries).toHaveLength(30);
+      const manifest = (await readManifest(s, st.id))!;
+      expect(manifest.entries).toHaveLength(30);
+      expect(manifest.released).toHaveLength(29);
+      expect(manifest.released).not.toContain('f7.jpg');
     });
 
     it('keeps ids stable on retry when same-named files sit in different folders', async () => {
@@ -141,6 +145,26 @@ describe('runImport', () => {
       expect(calls).toEqual([hashed]);
       expect(second).toMatchObject({ state: 'done', posts: { done: 2, failed: 0 } });
       expect(await s.exists(keys.post(hashed))).toBe(true);
+    });
+
+    it('keeps a skipped post’s files, so a retry can attempt it again', async () => {
+      const s = testStore('run-release-skipped');
+      const st = await stageImport(s, { 'a.mp3': 'a', 'b.jpg': 'b' });
+      const cfg = resolveConfig({ kinds: ['post'] }, {});
+      const asAudio =
+        (inner: ReturnType<typeof fakeProcess>) =>
+        async (input: ItemInput, store: Store): Promise<ItemResult> => {
+          const r = await inner(input, store);
+          return r.ok && input.postId === 'files_a' ? { ok: true, item: { ...r.item, type: 'audio' } as never } : r;
+        };
+      const first = await runImport(st.id, deps(s, { config: cfg, process: asAudio(fakeProcess([], new Set(['files_b']))) }).d);
+      expect(first).toMatchObject({ posts: { skipped: 1, failed: 1 } });
+      expect(await left(s, st.id)).toEqual(['a.mp3', 'b.jpg']);
+      expect((await readManifest(s, st.id))!.released ?? []).toEqual([]);
+
+      await s.putJson(keys.importStatus(st.id), { ...first, state: 'queued' });
+      const second = await runImport(st.id, deps(s, { config: cfg, process: asAudio(fakeProcess([])) }).d);
+      expect(second).toMatchObject({ state: 'done', posts: { skipped: 1, failed: 0 } });
     });
 
     it('never deletes a selected file no post references (a sidecar stays until the upload is discarded)', async () => {

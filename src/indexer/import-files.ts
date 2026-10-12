@@ -43,7 +43,8 @@ export async function readManifest(store: Store, id: string): Promise<Manifest |
     seen.add(parsed.data.path);
     entries.push(parsed.data);
   }
-  const released = Array.isArray(raw.released) ? raw.released.filter((p): p is string => typeof p === 'string') : [];
+  const listed = new Set(entries.map((e) => e.path));
+  const released = Array.isArray(raw.released) ? raw.released.filter((p): p is string => isNormalPath(p) && listed.has(p)) : [];
   return { id, importer: raw.importer, entries, ...(released.length ? { released } : {}) };
 }
 
