@@ -95,6 +95,14 @@ describe('parseExport', () => {
     expect((await parseExport(files)).candidates.some((c) => c.kind === 'story')).toBe(false);
   });
 
+  it('records the listed JSON files it could not read, and reports an unreadable posts file as a malformed post', async () => {
+    const files = memoryFiles({ ...instagramFiles(), [`${IG}archived_posts.json`]: '{nope', [`${IG}posts_2.json`]: '[' });
+    const parsed = await parseExport({ ...files, readText: async (p) => (p.endsWith('recently_deleted_content.json') ? Promise.reject(new Error('Too large to read')) : files.readText(p)) });
+    expect(parsed.unreadable.sort()).toEqual(['archived_posts', 'posts_2', 'recently_deleted_content']);
+    expect(parsed.candidates.filter((c) => c.kind === 'post' && c.malformed)).toHaveLength(2); // the fixture's "not a record" and posts_2
+    expect((await parseExport(memoryFiles(instagramFiles()))).unreadable).toEqual([]);
+  });
+
   it('marks a post without any timestamp as malformed', async () => {
     const files = memoryFiles({ ...instagramFiles(), [`${IG}posts_2.json`]: JSON.stringify([{ title: 'x', media: [{ uri: 'media/posts/202403/draft.jpg' }] }]) });
     const post = (await parseExport(files)).candidates.filter((c) => c.kind === 'post').at(-1)!;

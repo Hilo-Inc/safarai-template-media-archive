@@ -6,6 +6,8 @@ import { extOf, hashtags, shortHash, slugId } from './text';
 import type { Importer, Listing, ListingEntry, RawMedia, RawPost, Selection } from './types';
 
 export const UNREADABLE_EXPORT = "The export's post list could not be read. Nothing was uploaded.";
+export const UNREADABLE_EXCLUSIONS = "The export's list of archived, deleted or draft posts could not be read. Nothing was uploaded.";
+const EXCLUSION_FILES = ['posts', 'archived_posts', 'recently_deleted_content'];
 const EPOCH = new Date(0).toISOString();
 
 function refusal(paths: string[]): string | null {
@@ -48,8 +50,12 @@ function admit(entries: ListingEntry[]): Selection {
   return counted(keep);
 }
 
+/** Without these lists archived, deleted and draft posts cannot be told apart, so the import must not go on. */
+const exclusionsUnreadable = (p: ParsedExport) => p.unreadable.some((n) => EXCLUSION_FILES.includes(n));
+
 async function select(listing: Listing, kinds?: readonly Kind[]): Promise<Selection> {
   const parsed = await parseExport(listing);
+  if (exclusionsUnreadable(parsed)) return { ok: false, reason: UNREADABLE_EXCLUSIONS };
   if (!parsed.candidates.some((c) => !c.malformed)) return { ok: false, reason: UNREADABLE_EXPORT };
   const find = resolver(listing.entries);
   const wanted = new Set(parsed.jsonFiles);
@@ -71,6 +77,7 @@ async function select(listing: Listing, kinds?: readonly Kind[]): Promise<Select
 
 async function read(files: Listing, config: ArchiveConfig): Promise<RawPost[]> {
   const parsed = await parseExport(files);
+  if (exclusionsUnreadable(parsed)) throw new Error(UNREADABLE_EXCLUSIONS);
   const find = resolver(files.entries);
   const used = new Set<string>();
   const posts: RawPost[] = [];

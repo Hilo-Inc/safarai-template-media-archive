@@ -37,6 +37,8 @@ export interface ParsedExport {
   avatar: string | null;
   /** Listing paths of the JSON files read. */
   jsonFiles: string[];
+  /** Names ("archived_posts", "posts_2", …) of listed JSON files that could not be read or parsed. */
+  unreadable: string[];
 }
 
 const READ = /^(?:[^/]+\/)?your_instagram_activity\/media\/(posts_\d+|posts|reels|stories|profile_photos|archived_posts|recently_deleted_content)\.json$/;
@@ -77,13 +79,9 @@ export function exportJsonFiles(entries: ListingEntry[]): Map<string, ListingEnt
   return out;
 }
 
+/** The parsed JSON, or null when the file is not listed. Throws when it is listed but cannot be read or parsed. */
 async function readJson(listing: Listing, entry: ListingEntry | undefined): Promise<unknown> {
-  if (!entry) return null;
-  try {
-    return JSON.parse(await listing.readText(entry.path));
-  } catch {
-    return null;
-  }
+  return entry ? JSON.parse(await listing.readText(entry.path)) : null;
 }
 
 const text = (v: unknown): string => {
@@ -225,7 +223,16 @@ const postsNumber = (name: string) => Number(name.slice('posts_'.length));
 
 export async function parseExport(listing: Listing): Promise<ParsedExport> {
   const files = exportJsonFiles(listing.entries);
-  const get = (name: string) => readJson(listing, files.get(name));
+  const unreadable: string[] = [];
+  // A listed file that fails to read or parse is recorded (never silently treated as empty) and reads as absent.
+  const get = async (name: string): Promise<unknown> => {
+    try {
+      return await readJson(listing, files.get(name));
+    } catch {
+      unreadable.push(name);
+      return null;
+    }
+  };
   const candidates: IgCandidate[] = [];
   const counts: Record<IgKind, number> = { post: 0, reel: 0, story: 0 };
   const add = (c: IgCandidate | null) => {
@@ -234,8 +241,11 @@ export async function parseExport(listing: Listing): Promise<ParsedExport> {
 
   const postFiles = [...files.keys()].filter((k) => /^posts_\d+$/.test(k)).sort((a, b) => postsNumber(a) - postsNumber(b));
   for (const name of postFiles) {
+    const before = unreadable.length;
     const json = await get(name);
-    if (Array.isArray(json)) for (const entry of json) add(postCandidate(entry, counts.post++));
+    // The owner sees an unreadable posts file as a failed post, not as nothing.
+    if (unreadable.length > before) add(malformed('post', counts.post++));
+    else if (Array.isArray(json)) for (const entry of json) add(postCandidate(entry, counts.post++));
   }
   for (const group of listOf(await get('reels'), 'ig_reels_media')) {
     if (!isObj(group) || !Array.isArray(group.media)) add(malformed('reel', counts.reel++));
@@ -267,15 +277,9 @@ export async function parseExport(listing: Listing): Promise<ParsedExport> {
     }
   }
 
-  return {
-    candidates,
-    archived: urisIn(await get('archived_posts')),
-    deleted: urisIn(await get('recently_deleted_content')),
-    drafts,
-    locations,
-    avatar,
-    jsonFiles: [...files.values()].map((e) => e.path),
-  };
+  const archived = urisIn(await get('archived_posts'));
+  const deleted = urisIn(await get('recently_deleted_content'));
+  return { candidates, archived, deleted, drafts, locations, avatar, jsonFiles: [...files.values()].map((e) => e.path), unreadable };
 }
 
 /** "media/other/123.mp4" â†’ "123". */

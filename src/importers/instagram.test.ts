@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveConfig } from '../config/load';
 import { IG, instagramFiles } from '../../test/fixtures/instagram';
 import { memoryFiles } from '../../test/helpers/memory-files';
-import { instagramImporter as ig, UNREADABLE_EXPORT } from './instagram';
+import { instagramImporter as ig, UNREADABLE_EXCLUSIONS, UNREADABLE_EXPORT } from './instagram';
 
 const config = resolveConfig({ preset: 'instagram' }, {});
 const paths = (sel: Awaited<ReturnType<typeof ig.select>>) => (sel.ok ? sel.files.map((f) => f.path).sort() : sel.reason);
@@ -50,6 +50,31 @@ describe('instagram select', () => {
   it('refuses when no record can be read', async () => {
     const sel = await ig.select(memoryFiles({ [`${IG}posts_1.json`]: '{broken', [`${IG}stories.json`]: '{"ig_stories":[]}', 'media/posts/a.jpg': { size: 1 } }));
     expect(sel).toEqual({ ok: false, reason: UNREADABLE_EXPORT });
+  });
+});
+
+describe('instagram exclusion lists that cannot be read', () => {
+  for (const name of ['archived_posts', 'recently_deleted_content', 'posts']) {
+    it(`refuses in select and read when ${name}.json is listed but broken, instead of publishing archived or deleted posts`, async () => {
+      const files = memoryFiles({ ...instagramFiles(), [`${IG}${name}.json`]: '{broken' });
+      expect(await ig.select(files)).toEqual({ ok: false, reason: UNREADABLE_EXCLUSIONS });
+      await expect(ig.read(files, config)).rejects.toThrow(UNREADABLE_EXCLUSIONS);
+    });
+  }
+
+  it('refuses when an exclusion list is over the size limit or fails to read', async () => {
+    const files = memoryFiles(instagramFiles());
+    const failing = { ...files, readText: async (p: string) => (p.endsWith('archived_posts.json') ? Promise.reject(new Error('Too large to read')) : files.readText(p)) };
+    expect(await ig.select(failing)).toEqual({ ok: false, reason: UNREADABLE_EXCLUSIONS });
+    await expect(ig.read(failing, config)).rejects.toThrow(UNREADABLE_EXCLUSIONS);
+  });
+
+  it('reports an unreadable posts_<n>.json as a post the owner sees fail, and still imports the rest', async () => {
+    const files = memoryFiles({ ...instagramFiles(), [`${IG}posts_2.json`]: '[' });
+    expect(await ig.select(files)).toMatchObject({ ok: true });
+    const raws = await ig.read(files, config);
+    expect(raws.filter((r) => r.id.startsWith('malformed-post-')).length).toBeGreaterThanOrEqual(2);
+    expect(raws.some((r) => r.id === 'c1')).toBe(true);
   });
 });
 
