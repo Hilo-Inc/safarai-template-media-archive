@@ -23,10 +23,20 @@ export async function avatarWebp(input: Buffer): Promise<Buffer> {
   return sharp(input).rotate().resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'cover' }).webp({ quality: 85 }).toBuffer();
 }
 
-/** Saves a new avatar version, removes the older ones and points site.json at it. */
-export async function storeAvatar(store: Store, webp: Buffer): Promise<string> {
+/**
+ * Saves a new avatar version, removes the older ones and points site.json at it.
+ * With `onlyIfUnset`, site.json is read again after the upload: an avatar the owner set in the meantime is kept
+ * untouched (nothing is overwritten or deleted) and this returns null.
+ */
+export async function storeAvatar(store: Store, webp: Buffer): Promise<string>;
+export async function storeAvatar(store: Store, webp: Buffer, opts: { onlyIfUnset: true }): Promise<string | null>;
+export async function storeAvatar(store: Store, webp: Buffer, opts?: { onlyIfUnset: true }): Promise<string | null> {
   const key = keys.avatar(`${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
   await store.put(key, webp, 'image/webp', CACHE_MEDIA);
+  if (opts?.onlyIfUnset && (await loadSite(store)).avatar) {
+    await store.deleteKeys([key]);
+    return null;
+  }
   const old = (await store.list(keys.avatarPrefix)).map((o) => o.key).filter((k) => k !== key && k.startsWith(`${keys.avatarPrefix}avatar-`));
   await store.deleteKeys(old);
   await saveSite(store, { ...(await loadSite(store)), avatar: key });

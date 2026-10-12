@@ -388,6 +388,38 @@ describe('Instagram avatar and kinds', () => {
     expect((await loadSite(s)).avatar).toBe('media/site/avatar-keep.webp');
   });
 
+  it('does not look for the profile photo when the site already has an avatar', async () => {
+    const s = testStore('run-avatar-set');
+    const avatar = vi.spyOn(IMPORTERS.find((i) => i.name === 'instagram')!, 'avatar');
+    await saveSite(s, { ...(await loadSite(s)), avatar: 'media/site/avatar-keep.webp' });
+    const st = await stageImport(s, instagramJson({ malformed: false }), { importer: 'instagram' });
+    await runImport(st.id, deps(s).d);
+    expect(avatar).not.toHaveBeenCalled();
+    expect((await loadSite(s)).avatar).toBe('media/site/avatar-keep.webp');
+  });
+
+  it('neither overwrites nor deletes an avatar the owner uploads while the import runs', async () => {
+    const s = testStore('run-avatar-race');
+    const dir = await mkdtemp(join(workRoot, 'av-'));
+    await makeJpeg(join(dir, 'p.jpg'), { width: 400, height: 300 });
+    const jpeg = await readFile(join(dir, 'p.jpg'));
+    const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': jpeg, 'media/other/single.jpg': jpeg };
+    const st = await stageImport(s, files, { importer: 'instagram' });
+    const mine = 'media/site/avatar-mine.webp';
+    const download = s.download.bind(s);
+    // The owner saves their own avatar while the profile photo is being downloaded.
+    vi.spyOn(s, 'download').mockImplementation(async (key, file) => {
+      if (key.endsWith('media/other/new.jpg') && !(await loadSite(s)).avatar) {
+        await s.put(mine, 'owner', 'image/webp');
+        await saveSite(s, { ...(await loadSite(s)), avatar: mine });
+      }
+      return download(key, file);
+    });
+    await runImport(st.id, deps(s).d);
+    expect((await loadSite(s)).avatar).toBe(mine);
+    expect((await s.list('media/site/')).map((o) => o.key)).toEqual([mine]);
+  });
+
   it('does not fail the import when the profile photo is not an image', async () => {
     const s = testStore('run-avatar-bad');
     const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': 'not an image', 'media/other/single.jpg': 'x' };

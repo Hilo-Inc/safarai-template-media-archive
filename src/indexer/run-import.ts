@@ -61,12 +61,14 @@ async function discardUpload(store: Store, id: string): Promise<void> {
 async function importAvatar(importer: Importer, listing: ImportFiles, deps: RunDeps): Promise<void> {
   let dir: string | null = null;
   try {
+    // Checked first: finding the photo re-parses the whole export. storeAvatar checks again before it writes.
+    if ((await loadSite(deps.store)).avatar) return;
     const path = await importer.avatar!(listing);
-    if (!path || (await loadSite(deps.store)).avatar) return;
+    if (!path) return;
     dir = await mkdtemp(join(deps.workRoot, 'avatar-'));
     const file = join(dir, 'src');
     await listing.download(path, file);
-    await storeAvatar(deps.store, await avatarWebp(await readFile(file)));
+    await storeAvatar(deps.store, await avatarWebp(await readFile(file)), { onlyIfUnset: true });
   } catch {
     // No path or message: export paths can name the account.
     console.warn('The profile photo could not be used as the site picture');
