@@ -117,6 +117,8 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
   let opener: HTMLElement | null = null;
   /** True when this viewer pushed its own history entry (a deep link opens without one). */
   let pushed = false;
+  /** True from the moment a close went back through history until popstate finishes it; later closes are ignored. */
+  let closing = false;
   /** Bumped whenever the shown story changes or the viewer closes, so a slow load can tell it was overtaken. */
   let token = 0;
 
@@ -339,6 +341,7 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
   function open(at: number, link: HTMLElement | null, push: boolean): void {
     opener = link;
     pushed = push;
+    closing = false;
     userPaused = false;
     holdPaused = false;
     if (push) history.pushState({ story: true }, '', storyUrl(month, stories[at]!.id));
@@ -353,10 +356,14 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
 
   /** X, Esc, a swipe or the end of the last story. While the viewer owns a history entry this goes back and popstate finishes the close. */
   function close(fromHistory = false): void {
-    if (!dialog.open) return;
+    if (!dialog.open || (closing && !fromHistory)) return;
     const owns = pushed && (history.state as { story?: boolean } | null)?.story === true;
     const action = closeAction(pageMonth, month, owns, fromHistory);
     if (action.kind === 'back') {
+      closing = true;
+      token++;
+      clearTimeout(holdTimeout);
+      clearStage();
       history.back();
       return;
     }
@@ -367,6 +374,7 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
     errorEl.hidden = true;
     dialog.close();
     pushed = false;
+    closing = false;
     if (action.kind === 'navigate') {
       // The page behind shows another month; replace it so no entry is added and no ?s= is left.
       location.replace(action.url);
@@ -400,7 +408,11 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
   };
   frame.addEventListener('pointerdown', (e) => {
     if (!e.isPrimary || e.button !== 0 || (e.target as Element).closest('button')) return;
-    frame.setPointerCapture(e.pointerId);
+    try {
+      frame.setPointerCapture(e.pointerId);
+    } catch {
+      // a stale pointer; the press still works without capture
+    }
     down = { x: e.clientX, y: e.clientY, at: performance.now() };
     endHold();
     holdTimeout = window.setTimeout(() => {
