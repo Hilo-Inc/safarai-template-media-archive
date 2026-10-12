@@ -24,7 +24,7 @@ const days = storyDays(Astro.props.month).map((d) => {
 <ul class="days">
   {days.map((d) => (
     <li>
-      <a class="day" href={`/p/${d.first.id}`} data-story-id={d.first.id}>
+      <a class="day" href={`/p/${d.first.id}`} data-story-id={d.first.id} aria-label={`${formatDate(d.published)}, ${d.stories.length} ${d.stories.length === 1 ? "story" : "stories"}`}>
         {d.cover && (
           <img
             src={d.small?.src ?? d.cover.src}
