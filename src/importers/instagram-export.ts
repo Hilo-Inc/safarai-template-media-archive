@@ -48,7 +48,7 @@ export function safeUri(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const uri = value.trim();
   if (!uri || uri.startsWith('/') || uri.includes('\\') || /^[a-z][a-z0-9+.-]*:/i.test(uri)) return null;
-  if (uri.split('/').some((s) => s === '' || s === '.' || s === '..')) return null;
+  if (uri.split('/').some((s) => s === '' || s === '.' || s === '..' || ['.', '..'].includes(s.normalize('NFKC').trim()))) return null;
   if (isDeniedPath(uri) || isJunkPath(uri)) return null;
   return uri;
 }
@@ -92,12 +92,13 @@ const text = (v: unknown): string => {
   return t === 'Media' ? '' : t;
 };
 
-const seconds = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+const seconds = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v * 1000 <= 8.64e15 ? v : null);
 const iso = (s: number) => new Date(s * 1000).toISOString();
 
-function coordsOf(lat: unknown, lng: unknown): Coords | null {
-  const a = typeof lat === 'string' ? Number(lat) : lat;
-  const b = typeof lng === 'string' ? Number(lng) : lng;
+function coordsOf(lat: unknown, lng: unknown, parse = false): Coords | null {
+  const num = (v: unknown) => (parse && typeof v === 'string' && v.trim() !== '' ? Number(v) : v);
+  const a = num(lat);
+  const b = num(lng);
   if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) return null;
   if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
   return { lat: a, lng: b };
@@ -177,36 +178,44 @@ function storyCandidate(item: unknown, n: number): IgCandidate | null {
   return { kind: 'story', n, malformed: false, uris: [uri], subs: [null], caption: text(item.title), published: iso(ts), coords: exifCoords(item), music: null };
 }
 
+/** Children of a JSON container, for the iterative walks below (no recursion: a hostile file can nest arbitrarily deep). */
+const children = (v: unknown): unknown[] => (Array.isArray(v) ? v : isObj(v) ? Object.values(v) : []);
+
+/** Depth-first, document order, without recursion. */
+function* walk(root: unknown): Generator<unknown> {
+  const stack = [root];
+  while (stack.length) {
+    const v = stack.pop();
+    yield v;
+    const kids = children(v);
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
+  }
+}
+
 /** Every safe uri string at any depth. */
-function urisIn(value: unknown, out = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) for (const v of value) urisIn(v, out);
-  else if (isObj(value)) {
-    for (const [k, v] of Object.entries(value)) {
-      const uri = k === 'uri' ? safeUri(v) : null;
-      if (uri) out.add(uri);
-      else urisIn(v, out);
-    }
+function urisIn(root: unknown): Set<string> {
+  const out = new Set<string>();
+  for (const v of walk(root)) {
+    if (!isObj(v)) continue;
+    const uri = safeUri(v.uri);
+    if (uri) out.add(uri);
   }
   return out;
 }
 
-/** {label, value} string pairs at any depth. */
-function labels(value: unknown, out = new Map<string, string>()): Map<string, string> {
-  if (Array.isArray(value)) for (const v of value) labels(v, out);
-  else if (isObj(value)) {
-    if (typeof value.label === 'string' && typeof value.value === 'string' && !out.has(value.label)) out.set(value.label, value.value);
-    for (const v of Object.values(value)) labels(v, out);
+/** {label, value} string pairs at any depth; the first of a label wins. */
+function labels(root: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const v of walk(root)) {
+    if (isObj(v) && typeof v.label === 'string' && typeof v.value === 'string' && !out.has(v.label)) out.set(v.label, v.value);
   }
   return out;
 }
 
 /** Media objects under a "Media" label, at any depth. */
-function labelledMedia(value: unknown, out: unknown[] = []): unknown[] {
-  if (Array.isArray(value)) for (const v of value) labelledMedia(v, out);
-  else if (isObj(value)) {
-    if (value.label === 'Media' && Array.isArray(value.media)) out.push(...value.media);
-    for (const v of Object.values(value)) labelledMedia(v, out);
-  }
+function labelledMedia(root: unknown): unknown[] {
+  const out: unknown[] = [];
+  for (const v of walk(root)) if (isObj(v) && v.label === 'Media' && Array.isArray(v.media)) out.push(...v.media);
   return out;
 }
 
@@ -241,7 +250,7 @@ export async function parseExport(listing: Listing): Promise<ParsedExport> {
     const media = labelledMedia(record);
     const uris = media.map((m) => (isObj(m) ? safeUri(m.uri) : null)).filter((u): u is string => u !== null);
     if (pairs.get('Published') === 'False' || pairs.get('Draft') === 'True') for (const u of uris) drafts.add(u);
-    const at = coordsOf(pairs.get('Latitude'), pairs.get('Longitude')) ?? media.map(exifCoords).find((c) => c !== null) ?? null;
+    const at = coordsOf(pairs.get('Latitude'), pairs.get('Longitude'), true) ?? media.map(exifCoords).find((c) => c !== null) ?? null;
     if (at) for (const u of uris) if (!locations.has(u)) locations.set(u, at);
   }
 
@@ -251,8 +260,8 @@ export async function parseExport(listing: Listing): Promise<ParsedExport> {
     if (!isObj(p)) continue;
     const uri = mediaUri(p.uri);
     const ext = uri ? extOf(uri) : '';
-    const ts = seconds(p.creation_timestamp) ?? 0;
-    if (uri && (ext === '' || MEDIA_EXTENSIONS.image.includes(ext)) && ts > newest) {
+    const ts = seconds(p.creation_timestamp);
+    if (uri && ts !== null && (ext === '' || MEDIA_EXTENSIONS.image.includes(ext)) && ts > newest) {
       avatar = uri;
       newest = ts;
     }

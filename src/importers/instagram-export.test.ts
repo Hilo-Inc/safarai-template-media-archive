@@ -101,3 +101,40 @@ describe('parseExport', () => {
     expect(post.malformed).toBe(true);
   });
 });
+
+describe('hostile exports never fail the parse', () => {
+  const only = (name: string, json: unknown) => memoryFiles({ [`${IG}${name}.json`]: typeof json === 'string' ? json : JSON.stringify(json) });
+  const exif = (latitude: unknown, longitude: unknown) => ({ media_metadata: { photo_metadata: { exif_data: [{ latitude, longitude }] } } });
+
+  it('treats a timestamp too large for a Date as malformed', async () => {
+    const post = await parseExport(only('posts_1', [{ creation_timestamp: 1e13, media: [{ uri: 'media/a.jpg' }] }]));
+    expect(post.candidates).toMatchObject([{ kind: 'post', malformed: true }]);
+    const story = await parseExport(only('stories', { ig_stories: [{ uri: 'media/a.jpg', creation_timestamp: 1e13 }] }));
+    expect(story.candidates).toMatchObject([{ kind: 'story', malformed: true }]);
+  });
+
+  it('survives absurdly deep nesting', async () => {
+    const deep = '['.repeat(200000) + ']'.repeat(200000);
+    const parsed = await parseExport(only('archived_posts', deep));
+    expect(parsed.archived.size).toBe(0);
+  });
+
+  it('does not turn empty coordinates into 0,0', async () => {
+    const post = await parseExport(only('posts_1', [{ creation_timestamp: 1700000000, media: [{ uri: 'media/a.jpg', ...exif('', '') }] }]));
+    expect(post.candidates[0]!.coords).toBeNull();
+    const numeric = await parseExport(only('posts_1', [{ creation_timestamp: 1700000000, media: [{ uri: 'media/a.jpg', ...exif('1', '2') }] }]));
+    expect(numeric.candidates[0]!.coords).toBeNull();
+    const rec = [{ label_values: [{ label: 'Latitude', value: ' ' }, { label: 'Longitude', value: '' }, { label: 'Media', media: [{ uri: 'media/a.jpg' }] }] }];
+    expect((await parseExport(only('posts', rec))).locations.size).toBe(0);
+  });
+
+  it('ignores profile photos without a timestamp', async () => {
+    const photos = { ig_profile_picture: [{ uri: 'media/none.jpg' }, { uri: 'media/old.jpg', creation_timestamp: 5 }] };
+    expect((await parseExport(only('profile_photos', photos))).avatar).toBe('media/old.jpg');
+    expect((await parseExport(only('profile_photos', { ig_profile_picture: [{ uri: 'media/none.jpg' }] }))).avatar).toBeNull();
+  });
+
+  it('rejects lookalike dot segments', () => {
+    for (const bad of ['media/\uFF0E\uFF0E/a.jpg', 'media/ .. /a.jpg', 'media/\uFF0E/a.jpg']) expect(safeUri(bad), bad).toBeNull();
+  });
+});
