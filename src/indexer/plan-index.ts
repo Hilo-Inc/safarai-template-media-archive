@@ -86,6 +86,7 @@ export function planIndex(posts: Post[], config: ArchiveConfig, now: Date): Map<
     platforms,
     pages,
     storyMonths,
+    storyCounts: Object.fromEntries(storyMonths.map((m) => [m, months.get(m)!.length])),
     tags,
   };
   out.set(keys.indexMeta, meta);
