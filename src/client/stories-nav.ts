@@ -59,3 +59,33 @@ export function isStale(fetchedAt: number, now: number): boolean {
 export function storyUrl(month: string, id: string): string {
   return `/stories/${month}?s=${encodeURIComponent(id)}`;
 }
+
+/** Movement under this many px is still a press, not a drag. */
+export const SLOP_PX = 10;
+
+/** What a finished press was: a tap, the release of a hold, a downward swipe that closes, or nothing. */
+export function classifyGesture(dx: number, dy: number, ms: number): 'tap' | 'hold' | 'swipe-close' | 'none' {
+  if (dy >= SWIPE_CLOSE_PX) return 'swipe-close';
+  if (Math.hypot(dx, dy) >= SLOP_PX) return 'none';
+  return ms >= HOLD_MS ? 'hold' : 'tap';
+}
+
+/**
+ * How the viewer closes. Back must only ever close it: while the viewer owns a history entry, closing goes back and
+ * the popstate finishes the job (`fromHistory`). A month other than the page's is shown by replacing the page.
+ */
+export function closeAction(pageMonth: string, viewerMonth: string, ownsEntry: boolean, fromHistory: boolean): { kind: 'back' } | { kind: 'navigate'; url: string } | { kind: 'reset'; url: string } | { kind: 'stay' } {
+  if (ownsEntry && !fromHistory) return { kind: 'back' };
+  if (viewerMonth !== pageMonth) return { kind: 'navigate', url: `/stories/${viewerMonth}` };
+  return fromHistory ? { kind: 'stay' } : { kind: 'reset', url: `/stories/${pageMonth}` };
+}
+
+/** The resolved URL when it is http(s), else null (javascript:, data: and garbage are refused). */
+export function safeUrl(value: string, base: string): string | null {
+  try {
+    const url = new URL(value, base);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}

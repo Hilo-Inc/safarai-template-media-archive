@@ -2,7 +2,7 @@
 // in order, moves across months, and keeps the history in step (Back closes it). The rules live in stories-nav.ts.
 // Everything fetched is untrusted: it is checked before use, a malformed response counts as a failed fetch, and
 // fetched strings only reach the page through textContent or DOM properties.
-import { dayRange, ERROR_MS, HOLD_MS, IMAGE_MS, isStale, next, preloadIds, prev, SWIPE_CLOSE_PX, storyUrl, tapZone, type StoryRef } from './stories-nav';
+import { classifyGesture, closeAction, dayRange, ERROR_MS, HOLD_MS, IMAGE_MS, isStale, next, preloadIds, prev, safeUrl, SLOP_PX, storyUrl, tapZone, type StoryRef } from './stories-nav';
 
 interface StoryMedia {
   type: 'image' | 'video';
@@ -46,16 +46,27 @@ function parsePost(value: unknown): StoryPost | null {
   if (!isObject(value) || typeof value.caption !== 'string' || !Array.isArray(value.media)) return null;
   const item: unknown = value.media[0];
   if (!isObject(item) || !isText(item.src)) return null;
+  const src = safeUrl(item.src, location.href);
+  if (!src) return null;
   if (item.type === 'image') {
-    return { caption: value.caption, media: { type: 'image', src: item.src, alt: typeof item.alt === 'string' ? item.alt : '', poster: null, subtitles: [] } };
+    return { caption: value.caption, media: { type: 'image', src, alt: typeof item.alt === 'string' ? item.alt : '', poster: null, subtitles: [] } };
   }
   if (item.type !== 'video') return null;
-  const poster = isObject(item.poster) && isText(item.poster.src) ? item.poster.src : null;
+  let poster: string | null = null;
+  if (isObject(item.poster) && isText(item.poster.src)) {
+    poster = safeUrl(item.poster.src, location.href);
+    if (!poster) return null;
+  }
   const subtitles: StoryMedia['subtitles'] = [];
   if (Array.isArray(item.subtitles)) {
-    for (const s of item.subtitles) if (isObject(s) && isText(s.src)) subtitles.push({ src: s.src, lang: typeof s.lang === 'string' ? s.lang : null });
+    for (const t of item.subtitles) {
+      if (!isObject(t) || !isText(t.src)) continue;
+      const trackSrc = safeUrl(t.src, location.href);
+      if (!trackSrc) return null;
+      subtitles.push({ src: trackSrc, lang: typeof t.lang === 'string' ? t.lang : null });
+    }
   }
-  return { caption: value.caption, media: { type: 'video', src: item.src, alt: '', poster, subtitles } };
+  return { caption: value.caption, media: { type: 'video', src, alt: '', poster, subtitles } };
 }
 
 function parseMonths(raw: string | undefined): string[] {
@@ -104,6 +115,8 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
   let stories: StoryRef[] = pageIndex.posts;
   let index = 0;
   let opener: HTMLElement | null = null;
+  /** True when this viewer pushed its own history entry (a deep link opens without one). */
+  let pushed = false;
   /** Bumped whenever the shown story changes or the viewer closes, so a slow load can tell it was overtaken. */
   let token = 0;
 
@@ -174,19 +187,21 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
       else video.play().catch(() => {});
     }
     pauseBtn.setAttribute('aria-pressed', String(userPaused));
-    pauseBtn.textContent = userPaused ? 'Play' : 'Pause';
   }
 
   function setMuted(on: boolean): void {
     muted = on;
     if (video) video.muted = on;
     muteBtn.setAttribute('aria-pressed', String(on));
-    muteBtn.textContent = on ? 'Unmute' : 'Mute';
   }
 
   function clearStage(): void {
     timer = null;
-    if (video) video.pause();
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
     video = null;
     stage.replaceChildren();
     captionEl.textContent = '';
@@ -237,15 +252,20 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
       el.append(track);
     });
     el.addEventListener('timeupdate', () => {
-      if (Number.isFinite(el.duration) && el.duration > 0) fillBar(el.currentTime / el.duration);
+      if (video === el && Number.isFinite(el.duration) && el.duration > 0) fillBar(el.currentTime / el.duration);
     });
-    el.addEventListener('ended', () => void goNext());
-    el.addEventListener('error', fail);
+    el.addEventListener('ended', () => {
+      if (video === el) void goNext();
+    });
+    el.addEventListener('error', () => {
+      if (video === el) fail();
+    });
     video = el;
     stage.replaceChildren(el);
     if (isPaused()) return;
-    el.play().catch(() => {
-      // Autoplay with sound can be refused; try again muted.
+    el.play().catch((err: unknown) => {
+      // Autoplay with sound can be refused; try again muted. An AbortError (the element was replaced) is ignored.
+      if (!(err instanceof DOMException) || err.name !== 'NotAllowedError' || video !== el) return;
       setMuted(true);
       el.play().catch(() => {});
     });
@@ -316,11 +336,12 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
     return show(at === 'first' ? 0 : stories.length - 1);
   }
 
-  function open(at: number, link: HTMLElement | null): void {
+  function open(at: number, link: HTMLElement | null, push: boolean): void {
     opener = link;
+    pushed = push;
     userPaused = false;
     holdPaused = false;
-    history.pushState({ story: true }, '', storyUrl(month, stories[at]!.id));
+    if (push) history.pushState({ story: true }, '', storyUrl(month, stories[at]!.id));
     dialog.showModal();
     frame.focus({ preventScroll: true });
     applyPause();
@@ -330,23 +351,28 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
     void show(at);
   }
 
+  /** X, Esc, a swipe or the end of the last story. While the viewer owns a history entry this goes back and popstate finishes the close. */
   function close(fromHistory = false): void {
     if (!dialog.open) return;
+    const owns = pushed && (history.state as { story?: boolean } | null)?.story === true;
+    const action = closeAction(pageMonth, month, owns, fromHistory);
+    if (action.kind === 'back') {
+      history.back();
+      return;
+    }
     token++;
     clearTimeout(holdTimeout);
     cancelAnimationFrame(frameId);
     clearStage();
     errorEl.hidden = true;
     dialog.close();
-    if (month !== pageMonth) {
-      // The page behind shows another month; load the one the viewer ended on.
-      location.assign(`/stories/${month}`);
+    pushed = false;
+    if (action.kind === 'navigate') {
+      // The page behind shows another month; replace it so no entry is added and no ?s= is left.
+      location.replace(action.url);
       return;
     }
-    if (!fromHistory) {
-      if ((history.state as { story?: boolean } | null)?.story) history.back();
-      else history.replaceState(null, '', `/stories/${pageMonth}`);
-    }
+    if (action.kind === 'reset') history.replaceState(null, '', action.url);
     opener?.focus({ preventScroll: true });
     opener = null;
   }
@@ -360,51 +386,56 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
     e.preventDefault();
     month = pageMonth;
     stories = pageIndex.posts;
-    open(at, link);
+    open(at, link, true);
   });
 
   // A pointer on the frame: a short press taps (back or forward) or swipes down to close; holding pauses.
-  let down: { x: number; y: number } | null = null;
-  frame.addEventListener('pointerdown', (e) => {
-    if ((e.target as Element).closest('button')) return;
-    down = { x: e.clientX, y: e.clientY };
-    holdPaused = false;
+  let down: { x: number; y: number; at: number } | null = null;
+  const endHold = () => {
     clearTimeout(holdTimeout);
+    if (holdPaused) {
+      holdPaused = false;
+      applyPause();
+    }
+  };
+  frame.addEventListener('pointerdown', (e) => {
+    if (!e.isPrimary || e.button !== 0 || (e.target as Element).closest('button')) return;
+    frame.setPointerCapture(e.pointerId);
+    down = { x: e.clientX, y: e.clientY, at: performance.now() };
+    endHold();
     holdTimeout = window.setTimeout(() => {
       holdPaused = true;
       applyPause();
     }, HOLD_MS);
   });
+  frame.addEventListener('pointermove', (e) => {
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) >= SLOP_PX) endHold();
+  });
   frame.addEventListener('pointerup', (e) => {
     if (!down) return;
     const start = down;
     down = null;
-    clearTimeout(holdTimeout);
-    if (holdPaused) {
-      holdPaused = false;
-      applyPause();
-      return;
+    const held = holdPaused;
+    endHold();
+    const gesture = classifyGesture(e.clientX - start.x, e.clientY - start.y, performance.now() - start.at);
+    if (gesture === 'swipe-close') close();
+    else if (gesture === 'tap' && !held) {
+      const rect = frame.getBoundingClientRect();
+      if (tapZone(e.clientX - rect.left, rect.width) === 'prev') void goPrev();
+      else void goNext();
     }
-    if (e.clientY - start.y > SWIPE_CLOSE_PX) {
-      close();
-      return;
-    }
-    const rect = frame.getBoundingClientRect();
-    if (tapZone(e.clientX - rect.left, rect.width) === 'prev') void goPrev();
-    else void goNext();
   });
-  frame.addEventListener('pointercancel', () => {
+  const cancelPress = () => {
     down = null;
-    clearTimeout(holdTimeout);
-    if (holdPaused) {
-      holdPaused = false;
-      applyPause();
-    }
-  });
+    endHold();
+  };
+  frame.addEventListener('pointercancel', cancelPress);
+  frame.addEventListener('lostpointercapture', cancelPress);
 
   dialog.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight') void goNext();
-    else if (e.key === 'ArrowLeft') void goPrev();
+    const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if (plain && e.key === 'ArrowRight') void goNext();
+    else if (plain && e.key === 'ArrowLeft') void goPrev();
     else if (e.key === ' ' && !(e.target as Element).closest('button')) {
       userPaused = !userPaused;
       applyPause();
@@ -434,6 +465,6 @@ function setUp(root: HTMLElement, dialog: HTMLDialogElement): void {
   if (wanted !== null) {
     history.replaceState(null, '', `/stories/${pageMonth}`);
     const at = pageIndex.posts.findIndex((p) => p.id === wanted);
-    if (at >= 0) open(at, null);
+    if (at >= 0) open(at, null, false);
   }
 }

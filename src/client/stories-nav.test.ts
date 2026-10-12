@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayRange, isStale, next, preloadIds, prev, STALE_MS, storyUrl, tapZone } from './stories-nav';
+import { classifyGesture, closeAction, dayRange, HOLD_MS, isStale, next, preloadIds, prev, safeUrl, STALE_MS, storyUrl, SWIPE_CLOSE_PX, tapZone } from './stories-nav';
 
 const refs = [{ id: 'a', day: 15 }, { id: 'b', day: 31 }, { id: 'c', day: 31 }];
 const months = ['2024-01', '2024-02'];
@@ -34,5 +34,35 @@ describe('stories navigation', () => {
   });
   it('builds the story URL', () => {
     expect(storyUrl('2024-01', 'instagram_a')).toBe('/stories/2024-01?s=instagram_a');
+  });
+});
+
+describe('stories close and gestures', () => {
+  it('closes through history when the viewer owns the entry', () => {
+    expect(closeAction('2024-01', '2024-01', true, false)).toEqual({ kind: 'back' });
+    expect(closeAction('2024-01', '2024-03', true, false)).toEqual({ kind: 'back' });
+  });
+  it('after history has gone back, stays or replaces to the viewer’s month', () => {
+    expect(closeAction('2024-01', '2024-01', true, true)).toEqual({ kind: 'stay' });
+    expect(closeAction('2024-01', '2024-03', true, true)).toEqual({ kind: 'navigate', url: '/stories/2024-03' });
+  });
+  it('without an owned entry (deep link), resets the URL or replaces to the month', () => {
+    expect(closeAction('2024-01', '2024-01', false, false)).toEqual({ kind: 'reset', url: '/stories/2024-01' });
+    expect(closeAction('2024-01', '2024-02', false, false)).toEqual({ kind: 'navigate', url: '/stories/2024-02' });
+  });
+  it('classifies gestures', () => {
+    expect(classifyGesture(2, 3, 100)).toBe('tap');
+    expect(classifyGesture(0, 0, HOLD_MS)).toBe('hold');
+    expect(classifyGesture(5, SWIPE_CLOSE_PX, 3000)).toBe('swipe-close');
+    expect(classifyGesture(0, -SWIPE_CLOSE_PX, 50)).toBe('none');
+    expect(classifyGesture(40, 20, 100)).toBe('none');
+  });
+  it('accepts only http(s) media URLs', () => {
+    const base = 'https://example.com/stories/2024-01';
+    expect(safeUrl('https://cdn.example.com/a.jpg', base)).toBe('https://cdn.example.com/a.jpg');
+    expect(safeUrl('/media/a.jpg', base)).toBe('https://example.com/media/a.jpg');
+    expect(safeUrl('javascript:alert(1)', base)).toBeNull();
+    expect(safeUrl('data:text/html,x', base)).toBeNull();
+    expect(safeUrl('http://[bad', base)).toBeNull();
   });
 });
