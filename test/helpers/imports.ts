@@ -7,7 +7,7 @@ import type { Store } from '../../src/lib/store';
 export async function stageImport(
   s: Store,
   files: Record<string, string | Uint8Array>,
-  opts: { id?: string; state?: ImportState; doneIds?: string[]; source?: 'upload' | 'inbox'; skipUpload?: string[] } = {},
+  opts: { id?: string; state?: ImportState; doneIds?: string[]; source?: 'upload' | 'inbox'; skipUpload?: string[]; importer?: string } = {},
 ): Promise<ImportStatus> {
   const id = opts.id ?? newImportId();
   const source = opts.source ?? 'upload';
@@ -19,9 +19,9 @@ export async function stageImport(
     }
     entries.push({ path, size: bytes.length, lastModified: Date.UTC(2025, 0, 1) });
   }
-  if (source === 'upload') await writeManifest(s, { id, importer: 'generic', entries });
+  if (source === 'upload') await writeManifest(s, { id, importer: opts.importer ?? 'generic', entries });
   const status: ImportStatus = {
-    ...newStatus({ id, importer: 'generic', source, files: entries.length, bytes: entries.reduce((n, e) => n + e.size, 0) }, new Date()),
+    ...newStatus({ id, importer: opts.importer ?? 'generic', source, files: entries.length, bytes: entries.reduce((n, e) => n + e.size, 0) }, new Date()),
     state: opts.state ?? 'queued',
     doneIds: opts.doneIds ?? [],
   };

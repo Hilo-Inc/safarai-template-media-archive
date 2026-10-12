@@ -5,13 +5,16 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { resolveConfig } from '../../src/config/load';
 import { IMPORTERS } from '../../src/importers/registry';
 import type { Importer } from '../../src/importers/types';
+import { run } from '../../src/indexer/exec';
 import { writeManifest } from '../../src/indexer/import-files';
 import type { ItemInput, ItemResult } from '../../src/indexer/process-item';
 import { runImport } from '../../src/indexer/run-import';
 import { readStatus, writeStatus } from '../../src/indexer/status';
 import { keys } from '../../src/lib/keys';
+import { loadSite, saveSite } from '../../src/lib/site';
 import type { Store } from '../../src/lib/store';
 import type { Post } from '../../src/schema/post';
+import { instagramJson } from '../fixtures/instagram';
 import { makePost } from '../fixtures/posts';
 import { stageImport } from '../helpers/imports';
 import { makeJpeg } from '../helpers/media';
@@ -281,5 +284,47 @@ describe('runImport', () => {
       expect(status!.failures.map((x) => x.postId)).toEqual(['files_x/0', 'files_x/1']);
       expect((await s.list('media/files_x/')).length).toBe(2);
     });
+  });
+});
+
+describe('Instagram avatar and kinds', () => {
+  it('sets the avatar from the newest profile photo only when the site has none', async () => {
+    const s = testStore('run-avatar');
+    const dir = await mkdtemp(join(workRoot, 'av-'));
+    await makeJpeg(join(dir, 'p.jpg'), { width: 400, height: 300, gps: true });
+    const jpeg = await readFile(join(dir, 'p.jpg'));
+    const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': jpeg, 'media/other/single.jpg': jpeg };
+    const st = await stageImport(s, files, { importer: 'instagram' });
+    await runImport(st.id, deps(s).d);
+    const avatar = (await loadSite(s)).avatar;
+    expect(avatar).toMatch(/^media\/site\/avatar-.+\.webp$/);
+
+    // The stored avatar is re-encoded: no GPS or EXIF survives.
+    const stored = join(dir, 'stored.webp');
+    await s.download(avatar!, stored);
+    const tags = JSON.parse((await run('exiftool', ['-j', '-n', stored])).stdout)[0] as Record<string, unknown>;
+    expect(Object.keys(tags).filter((k) => /^(GPS|Make$|Model$|Orientation$|DateTimeOriginal$)/.test(k))).toEqual([]);
+
+    await saveSite(s, { ...(await loadSite(s)), avatar: 'media/site/avatar-keep.webp' });
+    const again = await stageImport(s, files, { importer: 'instagram' });
+    await runImport(again.id, deps(s).d);
+    expect((await loadSite(s)).avatar).toBe('media/site/avatar-keep.webp');
+  });
+
+  it('does not fail the import when the profile photo is not an image', async () => {
+    const s = testStore('run-avatar-bad');
+    const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': 'not an image', 'media/other/single.jpg': 'x' };
+    const st = await stageImport(s, files, { importer: 'instagram' });
+    const status = await runImport(st.id, deps(s).d);
+    expect(status!.state).toBe('done');
+    expect((await loadSite(s)).avatar).toBeNull();
+  });
+
+  it('passes the configured kinds to select, so files of hidden kinds are not selected', async () => {
+    const s = testStore('run-ig-kinds');
+    const select = vi.spyOn(IMPORTERS.find((i) => i.name === 'instagram')!, 'select');
+    const st = await stageImport(s, instagramJson({ malformed: false }), { importer: 'instagram' });
+    await runImport(st.id, deps(s, { config: resolveConfig({ preset: 'instagram', kinds: ['post'] }, {}) }).d);
+    expect(select).toHaveBeenCalledWith(expect.anything(), ['post']);
   });
 });

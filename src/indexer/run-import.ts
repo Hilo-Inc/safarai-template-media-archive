@@ -1,12 +1,14 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ArchiveConfig, Kind } from '../config/schema';
 import { getImporter } from '../importers/registry';
 import { hashtags } from '../importers/text';
-import type { ImportFiles, RawPost } from '../importers/types';
+import type { ImportFiles, Importer, RawPost } from '../importers/types';
 import { keys } from '../lib/keys';
+import { loadSite } from '../lib/site';
 import type { Store } from '../lib/store';
 import { POST_ID_RE, postSchema, type MediaItem, type Post } from '../schema/post';
+import { avatarWebp, storeAvatar } from '../server/site';
 import { ImportError } from './errors';
 import { inboxImportFiles, uploadedImportFiles } from './import-files';
 import { applyLocation } from './location';
@@ -55,6 +57,24 @@ async function discardUpload(store: Store, id: string): Promise<void> {
   await store.deleteKeys([keys.importManifest(id)]);
 }
 
+/** The export's profile photo becomes the site avatar, unless the owner already chose one. A failure never fails the import. */
+async function importAvatar(importer: Importer, listing: ImportFiles, deps: RunDeps): Promise<void> {
+  let dir: string | null = null;
+  try {
+    const path = await importer.avatar!(listing);
+    if (!path || (await loadSite(deps.store)).avatar) return;
+    dir = await mkdtemp(join(deps.workRoot, 'avatar-'));
+    const file = join(dir, 'src');
+    await listing.download(path, file);
+    await storeAvatar(deps.store, await avatarWebp(await readFile(file)));
+  } catch {
+    // No path or message: export paths can name the account.
+    console.warn('The profile photo could not be used as the site picture');
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true });
+  }
+}
+
 export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus | null> {
   const { store, config } = deps;
   const now = deps.now ?? (() => new Date());
@@ -82,7 +102,7 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
 
     const importer = getImporter(status.importer);
     if (!importer) throw new ImportError(`Unknown importer "${status.importer}"`);
-    const selection = await importer.select(files);
+    const selection = await importer.select(files, config.kinds);
     if (!selection.ok) {
       // Refused (for example a Meta export): nothing from it stays in the bucket.
       if (status.source === 'upload') await discardUpload(store, id);
@@ -100,6 +120,7 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     // Unreadable overrides fail the import here, before any media work (writePost would refuse after files were processed).
     await readOverrides(store);
     await mkdir(deps.workRoot, { recursive: true });
+    if (importer.avatar) await importAvatar(importer, listing, deps);
     const done = new Set(status.doneIds);
     let handled = 0;
     for (const raw of raws) {
