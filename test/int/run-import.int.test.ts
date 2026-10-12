@@ -6,7 +6,7 @@ import { resolveConfig } from '../../src/config/load';
 import { IMPORTERS } from '../../src/importers/registry';
 import type { Importer } from '../../src/importers/types';
 import { run } from '../../src/indexer/exec';
-import { writeManifest } from '../../src/indexer/import-files';
+import { readManifest, writeManifest } from '../../src/indexer/import-files';
 import type { ItemInput, ItemResult } from '../../src/indexer/process-item';
 import { runImport } from '../../src/indexer/run-import';
 import { readStatus, writeStatus } from '../../src/indexer/status';
@@ -95,7 +95,9 @@ describe('runImport', () => {
 
     expect(first).toMatchObject({ state: 'done', posts: { done: 1, failed: 1 }, failures: [{ postId: 'files_b', path: 'b.jpg', reason: 'Broken file' }] });
     expect(await s.exists(keys.post('files_b'))).toBe(false);
-    expect((await s.list(keys.importPrefix(staged.id))).length).toBe(2);
+    // The finished post's file is already gone; the failed one's stays for the retry, and the manifest no longer lists the deleted file.
+    expect((await s.list(keys.importPrefix(staged.id))).map((o) => o.key.slice(keys.importPrefix(staged.id).length))).toEqual(['b.jpg']);
+    expect((await readManifest(s, staged.id))!.entries.map((e) => e.path)).toEqual(['b.jpg']);
 
     await s.putJson(keys.importStatus(staged.id), { ...first, state: 'queued' });
     calls.length = 0;
@@ -103,6 +105,34 @@ describe('runImport', () => {
     expect(calls).toEqual(['files_b']);
     expect(second).toMatchObject({ state: 'done', posts: { done: 2, failed: 0 }, failures: [] });
     expect(await s.list(keys.importPrefix(staged.id))).toEqual([]);
+  });
+
+  describe('freeing storage as items finish (I5)', () => {
+    const left = async (s: Store, id: string) => (await s.list(keys.importPrefix(id))).map((o) => o.key.slice(keys.importPrefix(id).length));
+
+    it('deletes each finished item’s upload and keeps a failed item’s files for retry', async () => {
+      const s = testStore('run-release');
+      const files: Record<string, string> = {};
+      for (let i = 0; i < 30; i++) files[`f${i}.jpg`] = 'x';
+      const st = await stageImport(s, files);
+      await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_f7'])) }).d);
+      expect(await left(s, st.id)).toEqual(['f7.jpg']);
+      expect((await readManifest(s, st.id))!.entries.map((e) => e.path)).toEqual(['f7.jpg']);
+    });
+
+    it('never deletes a file no post references (a JSON file stays until the upload is discarded)', async () => {
+      const s = testStore('run-release-json');
+      const st = await stageImport(s, { 'a.jpg': 'a', 'b.jpg': 'b', 'extra.json': '{}' });
+      await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_b'])) }).d);
+      expect(await left(s, st.id)).toEqual(['b.jpg', 'extra.json']);
+    });
+
+    it('deletes nothing from the inbox while a post has failed', async () => {
+      const s = testStore('run-release-inbox');
+      const st = await stageImport(s, { 'trip/a.jpg': 'a', 'trip/b.jpg': 'b' }, { source: 'inbox' });
+      await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_b'])) }).d);
+      expect((await s.list(keys.inbox)).map((o) => o.key)).toEqual(['inbox/trip/a.jpg', 'inbox/trip/b.jpg']);
+    });
   });
 
   it('reports files that never finished uploading', async () => {
