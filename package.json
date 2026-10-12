@@ -16,6 +16,7 @@
     "typecheck": "astro check",
     "lint": "eslint .",
     "sample-export": "esbuild scripts/sample-export.ts --bundle --platform=node --format=esm --target=node22 --packages=external --log-level=warning --outfile=.cache/sample-export.mjs && node .cache/sample-export.mjs",
+    "instagram-fixture": "esbuild scripts/make-instagram-fixture.ts --bundle --platform=node --format=esm --target=node22 --packages=external --log-level=warning --outfile=.cache/make-instagram-fixture.mjs && node .cache/make-instagram-fixture.mjs",
     "demo": "docker compose --profile demo up -d --build --wait demo-s3 demo-app && docker compose --profile demo run --rm --build demo-seed",
     "demo:down": "docker compose --profile demo down --volumes",
     "demo:seed": "esbuild scripts/demo-seed.ts --bundle --platform=node --format=esm --target=node22 --packages=external --log-level=warning --outfile=.cache/demo-seed.mjs && node .cache/demo-seed.mjs"

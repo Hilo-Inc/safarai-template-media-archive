@@ -73,10 +73,13 @@ async function zipDir(dir: string, file: string): Promise<void> {
 }
 await zipDir(folder, join(out, 'sample-export.zip'));
 
-// An Instagram-shaped export with a message thread: the generic importer must refuse all of it.
+// An Instagram-shaped export with a message thread: the instagram importer takes the post and never selects the message.
 const meta = new ZipWriter(new BlobWriter('application/zip'));
 await meta.add('your_instagram_activity/messages/inbox/someone_1/message_1.json', new TextReader('{"messages":[]}'));
-await meta.add('your_instagram_activity/media/posts_1.json', new TextReader('[]'));
+await meta.add(
+  'your_instagram_activity/media/posts_1.json',
+  new TextReader(JSON.stringify([{ title: 'Sample', creation_timestamp: 1_704_103_200, media: [{ uri: 'media/posts/202401/1.jpg', creation_timestamp: 1_704_103_200, title: '' }] }])),
+);
 await meta.add('media/posts/202401/1.jpg', new Uint8ArrayReader(await readFile(join(folder, 'photos', 'beach.jpg'))));
 await writeFile(join(out, 'meta-export.zip'), Buffer.from(await (await meta.close()).arrayBuffer()));
 
