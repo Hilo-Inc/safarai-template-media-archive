@@ -15,7 +15,7 @@ export type MentionsMode = (typeof MENTIONS)[number];
 
 /** The kinds a preset shows when archive.config.json does not list them. */
 export const PRESET_KINDS: Record<Preset, readonly Kind[]> = {
-  instagram: ['post', 'reel', 'story', 'igtv'],
+  instagram: ['post', 'reel', 'story'],
   tiktok: ['video'],
   youtube: ['video', 'short'],
   soundcloud: ['track'],

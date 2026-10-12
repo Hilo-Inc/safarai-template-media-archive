@@ -16,7 +16,8 @@ describe('resolveConfig', () => {
 
   it('takes kinds from the preset when they are not set', () => {
     expect(resolveConfig({ preset: 'tiktok' }, {}).kinds).toEqual(['video']);
-    expect(resolveConfig({ preset: 'instagram' }, {}).kinds).toEqual(['post', 'reel', 'story', 'igtv']);
+    expect(resolveConfig({ preset: 'instagram' }, {}).kinds).toEqual(['post', 'reel', 'story']);
+    expect(resolveConfig({ preset: 'instagram', kinds: ['post', 'igtv'] }, {}).kinds).toEqual(['post', 'igtv']);
     expect(resolveConfig({ preset: 'instagram', kinds: ['post'] }, {}).kinds).toEqual(['post']);
   });
 
