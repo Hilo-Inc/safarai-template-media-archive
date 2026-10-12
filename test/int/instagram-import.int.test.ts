@@ -16,7 +16,8 @@ import { loadSite } from '../../src/lib/site';
 import type { Store } from '../../src/lib/store';
 import type { Post } from '../../src/schema/post';
 import { createImport } from '../../src/server/imports';
-import { INSTAGRAM_MEDIA, instagramJson, writeInstagramMedia } from '../fixtures/instagram';
+import { DENIED_SEGMENTS } from '../../src/importers/guard';
+import { INSTAGRAM_MEDIA, instagramJson, MARKERS, writeInstagramMedia } from '../fixtures/instagram';
 import { testStore } from '../helpers/s3';
 
 const config = resolveConfig({ preset: 'instagram' }, {});
@@ -58,7 +59,12 @@ async function upload(s: Store, json: Record<string, string>): Promise<string> {
   const res = await createImport(s, { importer: 'instagram', entries: selection.files });
   expect(res.status).toBe(201);
   const { id, files } = (await res.json()) as { id: string; files: { path: string }[] };
+  // What the server accepts: nothing private, whatever the browser sent.
+  expect(files.length).toBeGreaterThan(10);
+  for (const f of files) expectNotPrivate(f.path, `accepted ${f.path}`);
   for (const f of files) await s.put(keys.importPrefix(id) + f.path, bodies.get(f.path)!, 'application/octet-stream');
+  // The bucket right after the upload, before runImport discards anything: "never uploaded", not "cleaned up".
+  await expectBucketClean(s);
   const status = (await readStatus(s, id))!;
   await writeStatus(s, { ...status, state: 'queued' });
   return id;
@@ -68,8 +74,33 @@ const deps = (s: Store, extra: Partial<Parameters<typeof runImport>[1]> = {}) =>
 const postOf = async (s: Store, id: string) => (await s.getJson<Post>(keys.post(id)))!;
 const prefixLeft = async (s: Store, id: string) => (await s.list(keys.importPrefix(id))).map((o) => o.key.slice(keys.importPrefix(id).length)).sort();
 
-/** Words of every private folder of the export, plus the draft, archived, deleted and unreferenced media. */
-const FORBIDDEN = ['messages', 'inbox', 'personal_information', 'connections', 'login', 'ads', 'igtv', 'archived', 'deleted', 'draft', 'unreferenced'];
+/** Folders that are never uploaded. Matched as whole path segments, so `uploads/` or `threads/` are not flagged. */
+const DENIED = new Set<string>([...DENIED_SEGMENTS, 'ads']);
+/** Draft, archived, deleted, IGTV and unreferenced media, found by file name. The export's own archived_posts.json etc. are allowlisted JSON, so only other files are checked. */
+const EXCLUDED_NAMES = ['igtv', 'archived', 'deleted', 'draft', 'unreferenced'];
+
+/** The server decides from paths alone, so it can only be held to the folder rules; `select` is what leaves out excluded media. */
+function expectNoDeniedFolder(path: string, label: string): void {
+  expect(path.toLowerCase().split('/').filter((seg) => DENIED.has(seg)), label).toEqual([]);
+}
+
+function expectNotPrivate(path: string, label: string): void {
+  expectNoDeniedFolder(path, label);
+  const segments = path.toLowerCase().split('/');
+  const name = segments.at(-1)!;
+  if (!name.endsWith('.json')) expect(EXCLUDED_NAMES.filter((w) => name.includes(w)), label).toEqual([]);
+}
+
+/** Every key passes the path rules, and no stored JSON object (the manifest included) holds a marker or other private text. */
+async function expectBucketClean(s: Store): Promise<void> {
+  const all = (await s.list('')).map((o) => o.key);
+  expect(all.length).toBeGreaterThan(5);
+  for (const key of all) expectNotPrivate(key.startsWith('imports/') ? key.split('/').slice(2).join('/') : key, key);
+  for (const key of all.filter((k) => k.endsWith('.json'))) {
+    const text = (await s.getText(key))!;
+    for (const marker of Object.values(MARKERS)) expect(text, `${marker} in ${key}`).not.toContain(marker);
+  }
+}
 
 describe('Instagram export, end to end', () => {
   it('imports posts, reels and stories, and nothing private', async () => {
@@ -86,10 +117,9 @@ describe('Instagram export, end to end', () => {
     for (const n of [1, 2, 3, 4]) expect(await postOf(s, `instagram_s${n}`)).toMatchObject({ kind: 'story' });
     for (const p of ['archived', 'deleted', 'draft']) expect(await s.exists(keys.post(`instagram_${p}`))).toBe(false);
 
-    // Privacy: every key in the bucket, and every stored JSON document.
+    // Privacy: every key in the bucket, and every stored JSON document, including the manifest if it were still there.
+    await expectBucketClean(s);
     const all = (await s.list('')).map((o) => o.key);
-    expect(all.length).toBeGreaterThan(10);
-    for (const key of all) for (const word of FORBIDDEN) expect(key.toLowerCase(), key).not.toContain(word);
     expect(all.some((k) => k.endsWith('old.jpg'))).toBe(false);
     const jsonKeys = all.filter((k) => k.endsWith('.json'));
     expect(jsonKeys.filter((k) => k.startsWith('posts/')).length).toBe(8);
@@ -159,6 +189,21 @@ describe('Instagram export, end to end', () => {
     const manifest = (await readManifest(s, id))!;
     expect(manifest.released).toContain('media/posts/202401/c1.jpg');
     expect(manifest.released).not.toContain('media/stories/202401/s2.mp4');
+  });
+
+  it('admits none of the private files even when the browser offers every file in the export', async () => {
+    const s = testStore('ig-e2e-hostile');
+    const all = { ...instagramJson({ malformed: false }), ...Object.fromEntries(Object.keys(INSTAGRAM_MEDIA).map((p) => [p, ''])) };
+    const res = await createImport(s, { importer: 'instagram', entries: Object.keys(all).map((path) => ({ path, size: 10, lastModified: null })) });
+    expect(res.status).toBe(201);
+    const { files } = (await res.json()) as { files: { path: string }[] };
+    const paths = files.map((f) => f.path);
+    expect(paths).toContain('your_instagram_activity/media/posts_1.json');
+    expect(paths).toContain('media/posts/202401/c1.jpg');
+    for (const p of paths) expectNoDeniedFolder(p, `accepted ${p}`);
+    for (const p of ['ads_information/instagram_ads_and_businesses/x.jpg', 'your_instagram_activity/messages/inbox/someone_1/photo.jpg', 'ads/ads_viewed.json', 'logged_information/login_and_profile_creation/login_activity.json']) {
+      expect(paths).not.toContain(p);
+    }
   });
 
   it('accepts the old sample meta export', async () => {

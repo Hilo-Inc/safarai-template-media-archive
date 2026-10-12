@@ -8,6 +8,15 @@ export const IG = 'your_instagram_activity/media/';
 /** How Meta writes UTF-8: each byte as its own \u00XX code unit. */
 export const moji = (s: string) => String.fromCharCode(...new TextEncoder().encode(s));
 
+/** Unique strings planted in files that must never reach the bucket, so a test can search for them. */
+export const MARKERS = {
+  dm: 'DM-MARKER-7f3a',
+  login: 'LOGIN-MARKER-2b91',
+  security: 'SECURITY-MARKER-c40d',
+  ads: 'ADS-MARKER-9e15',
+  adsFolder: 'ADSDIR-MARKER-51aa',
+} as const;
+
 const DEVICE = [{ latitude: 48.85, longitude: 2.35 }, { device_id: 'android-test-device', source_type: '63' }];
 
 export function instagramJson(opts: { malformed?: boolean } = {}): Record<string, string> {
@@ -95,7 +104,11 @@ export function instagramJson(opts: { malformed?: boolean } = {}): Record<string
       { timestamp: 1709000001, media: [], label_values: [{ label: 'Media', media: [{ uri: 'media/posts/202403/deleted.jpg', title: '' }] }] },
     ],
     [`${IG}igtv_videos.json`]: { ig_igtv_media: [{ media: [{ uri: 'media/other/igtv.mp4', creation_timestamp: 1712000000, title: 'IGTV' }] }] },
-    'your_instagram_activity/messages/inbox/someone_1/message_1.json': { messages: [] },
+    'your_instagram_activity/messages/inbox/someone_1/message_1.json': { messages: [{ sender_name: 'Someone', timestamp_ms: 1704103200000, content: MARKERS.dm }] },
+    'logged_information/login_and_profile_creation/login_activity.json': { account_history_login_history: [{ title: MARKERS.login, string_map_data: {} }] },
+    'security_and_login_information/login_and_account_creation/password_change_activity.json': { account_history_password_change_history: [{ title: MARKERS.security }] },
+    'ads_information/ads_and_topics/ads_viewed.json': { impressions_history_ads_seen: [{ title: MARKERS.ads }] },
+    'ads/ads_viewed.json': { impressions_history_ads_seen: [{ title: MARKERS.adsFolder }] },
     'personal_information/personal_information/personal_information.json': { profile_user: [] },
     'connections/followers_and_following/followers_1.json': [],
   };
@@ -122,6 +135,7 @@ export const INSTAGRAM_MEDIA: Record<string, 'jpg' | 'gps-jpg' | 'mp4' | 'gps-mp
   'media/other/igtv.mp4': 'mp4',
   'media/posts/202407/unreferenced.jpg': 'jpg',
   'your_instagram_activity/messages/inbox/someone_1/photo.jpg': 'jpg',
+  'ads_information/instagram_ads_and_businesses/x.jpg': 'jpg',
 };
 
 export function instagramFiles(opts: { root?: string; malformed?: boolean; omit?: string[] } = {}): Record<string, string | { size: number }> {
