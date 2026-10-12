@@ -37,7 +37,7 @@ export interface ParsedExport {
   avatar: string | null;
   /** Listing paths of the JSON files read. */
   jsonFiles: string[];
-  /** Names ("archived_posts", "posts_2", …) of listed JSON files that could not be read or parsed. */
+  /** Names ("archived_posts", "posts_2", â€¦) of listed JSON files that could not be read or parsed. */
   unreadable: string[];
 }
 
