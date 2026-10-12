@@ -36,11 +36,13 @@ export function importLabel(s: ImportView): string {
     case 'done': {
       const parts = [plural(done, 'post')];
       if (failed > 0) parts.push(`${failed} failed`);
-      if (skipped > 0) parts.push(`${skipped} already imported`);
+      if (skipped > 0) parts.push(`${skipped} not published`);
       return `Done: ${parts.join(', ')}`;
     }
   }
 }
+
+export const problemsLabel = (n: number) => plural(n, 'problem');
 
 export function selectionSummary(selected: ListingEntry[], listed: number): string {
   const bytes = selected.reduce((n, e) => n + e.size, 0);

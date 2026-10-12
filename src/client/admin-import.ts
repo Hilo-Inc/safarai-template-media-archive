@@ -1,5 +1,5 @@
 import { formatBytes, formatDate } from '../render/format';
-import { importActions, importLabel, instagramSummary, missingLine, selectionSummary, type ImportAction, type ImportView } from './admin-view';
+import { importActions, importLabel, instagramSummary, missingLine, problemsLabel, selectionSummary, type ImportAction, type ImportView } from './admin-view';
 import { listFilesNamingZip, planUploads, sourceListing, type Source } from './listing';
 import { api, uploadAll } from './upload';
 import type { Kind } from '../config/schema';
@@ -197,7 +197,7 @@ function row(s: ImportView): HTMLLIElement {
   if (s.failures.length > 0) {
     const details = document.createElement('details');
     const summary = document.createElement('summary');
-    summary.textContent = `${s.failures.length} problems`;
+    summary.textContent = problemsLabel(s.failures.length);
     const ul = document.createElement('ul');
     for (const f of s.failures) {
       const item = document.createElement('li');
