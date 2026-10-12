@@ -5,13 +5,16 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { resolveConfig } from '../../src/config/load';
 import { IMPORTERS } from '../../src/importers/registry';
 import type { Importer } from '../../src/importers/types';
-import { writeManifest } from '../../src/indexer/import-files';
+import { run } from '../../src/indexer/exec';
+import { readManifest, writeManifest } from '../../src/indexer/import-files';
 import type { ItemInput, ItemResult } from '../../src/indexer/process-item';
 import { runImport } from '../../src/indexer/run-import';
 import { readStatus, writeStatus } from '../../src/indexer/status';
 import { keys } from '../../src/lib/keys';
+import { loadSite, saveSite } from '../../src/lib/site';
 import type { Store } from '../../src/lib/store';
 import type { Post } from '../../src/schema/post';
+import { instagramJson } from '../fixtures/instagram';
 import { makePost } from '../fixtures/posts';
 import { stageImport } from '../helpers/imports';
 import { makeJpeg } from '../helpers/media';
@@ -92,7 +95,10 @@ describe('runImport', () => {
 
     expect(first).toMatchObject({ state: 'done', posts: { done: 1, failed: 1 }, failures: [{ postId: 'files_b', path: 'b.jpg', reason: 'Broken file' }] });
     expect(await s.exists(keys.post('files_b'))).toBe(false);
-    expect((await s.list(keys.importPrefix(staged.id))).length).toBe(2);
+    // The finished post's file is already gone; the failed one's stays for the retry. The manifest still lists both, so ids stay stable.
+    expect((await s.list(keys.importPrefix(staged.id))).map((o) => o.key.slice(keys.importPrefix(staged.id).length))).toEqual(['b.jpg']);
+    expect((await readManifest(s, staged.id))!.entries.map((e) => e.path)).toEqual(['a.jpg', 'b.jpg']);
+    expect((await readManifest(s, staged.id))!.released).toEqual(['a.jpg']);
 
     await s.putJson(keys.importStatus(staged.id), { ...first, state: 'queued' });
     calls.length = 0;
@@ -100,6 +106,80 @@ describe('runImport', () => {
     expect(calls).toEqual(['files_b']);
     expect(second).toMatchObject({ state: 'done', posts: { done: 2, failed: 0 }, failures: [] });
     expect(await s.list(keys.importPrefix(staged.id))).toEqual([]);
+  });
+
+  describe('freeing storage as items finish (I5)', () => {
+    const left = async (s: Store, id: string) => (await s.list(keys.importPrefix(id))).map((o) => o.key.slice(keys.importPrefix(id).length));
+
+    it('deletes each finished item’s upload and keeps a failed item’s files for retry', async () => {
+      const s = testStore('run-release');
+      const files: Record<string, string> = {};
+      for (let i = 0; i < 30; i++) files[`f${i}.jpg`] = 'x';
+      const st = await stageImport(s, files);
+      await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_f7'])) }).d);
+      expect(await left(s, st.id)).toEqual(['f7.jpg']);
+      const manifest = (await readManifest(s, st.id))!;
+      expect(manifest.entries).toHaveLength(30);
+      expect(manifest.released).toHaveLength(29);
+      expect(manifest.released).not.toContain('f7.jpg');
+    });
+
+    it('keeps ids stable on retry when same-named files sit in different folders', async () => {
+      const files = { 'a/photo.jpg': 'a', 'b/photo.jpg': 'b' };
+      // The second file gets a hashed id; learn it from a probe run.
+      const probe = testStore('run-release-ids-probe');
+      const probeCalls: string[] = [];
+      await runImport((await stageImport(probe, files)).id, deps(probe, { process: fakeProcess(probeCalls) }).d);
+      const hashed = probeCalls.find((c) => c !== 'files_photo')!;
+      expect(hashed).toMatch(/^files_photo-/);
+
+      const s = testStore('run-release-ids');
+      const st = await stageImport(s, files);
+      const calls: string[] = [];
+      const first = await runImport(st.id, deps(s, { process: fakeProcess(calls, new Set([hashed])) }).d);
+      expect(first).toMatchObject({ posts: { done: 1, failed: 1 } });
+
+      await s.putJson(keys.importStatus(st.id), { ...first, state: 'queued' });
+      calls.length = 0;
+      const second = await runImport(st.id, deps(s, { process: fakeProcess(calls) }).d);
+      expect(calls).toEqual([hashed]);
+      expect(second).toMatchObject({ state: 'done', posts: { done: 2, failed: 0 } });
+      expect(await s.exists(keys.post(hashed))).toBe(true);
+    });
+
+    it('keeps a skipped post’s files, so a retry can attempt it again', async () => {
+      const s = testStore('run-release-skipped');
+      const st = await stageImport(s, { 'a.mp3': 'a', 'b.jpg': 'b' });
+      const cfg = resolveConfig({ kinds: ['post'] }, {});
+      const asAudio =
+        (inner: ReturnType<typeof fakeProcess>) =>
+        async (input: ItemInput, store: Store): Promise<ItemResult> => {
+          const r = await inner(input, store);
+          return r.ok && input.postId === 'files_a' ? { ok: true, item: { ...r.item, type: 'audio' } as never } : r;
+        };
+      const first = await runImport(st.id, deps(s, { config: cfg, process: asAudio(fakeProcess([], new Set(['files_b']))) }).d);
+      expect(first).toMatchObject({ posts: { skipped: 1, failed: 1 } });
+      expect(await left(s, st.id)).toEqual(['a.mp3', 'b.jpg']);
+      expect((await readManifest(s, st.id))!.released ?? []).toEqual([]);
+
+      await s.putJson(keys.importStatus(st.id), { ...first, state: 'queued' });
+      const second = await runImport(st.id, deps(s, { config: cfg, process: asAudio(fakeProcess([])) }).d);
+      expect(second).toMatchObject({ state: 'done', posts: { skipped: 1, failed: 0 } });
+    });
+
+    it('never deletes a selected file no post references (a sidecar stays until the upload is discarded)', async () => {
+      const s = testStore('run-release-json');
+      const st = await stageImport(s, { 'a.jpg': 'a', 'a.jpg.json': '{}', 'b.jpg': 'b' });
+      await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_b'])) }).d);
+      expect(await left(s, st.id)).toEqual(['a.jpg.json', 'b.jpg']);
+    });
+
+    it('deletes nothing from the inbox while a post has failed', async () => {
+      const s = testStore('run-release-inbox');
+      const st = await stageImport(s, { 'trip/a.jpg': 'a', 'trip/b.jpg': 'b' }, { source: 'inbox' });
+      await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_b'])) }).d);
+      expect((await s.list(keys.inbox)).map((o) => o.key)).toEqual(['inbox/trip/a.jpg', 'inbox/trip/b.jpg']);
+    });
   });
 
   it('reports files that never finished uploading', async () => {
@@ -281,5 +361,79 @@ describe('runImport', () => {
       expect(status!.failures.map((x) => x.postId)).toEqual(['files_x/0', 'files_x/1']);
       expect((await s.list('media/files_x/')).length).toBe(2);
     });
+  });
+});
+
+describe('Instagram avatar and kinds', () => {
+  it('sets the avatar from the newest profile photo only when the site has none', async () => {
+    const s = testStore('run-avatar');
+    const dir = await mkdtemp(join(workRoot, 'av-'));
+    await makeJpeg(join(dir, 'p.jpg'), { width: 400, height: 300, gps: true });
+    const jpeg = await readFile(join(dir, 'p.jpg'));
+    const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': jpeg, 'media/other/single.jpg': jpeg };
+    const st = await stageImport(s, files, { importer: 'instagram' });
+    await runImport(st.id, deps(s).d);
+    const avatar = (await loadSite(s)).avatar;
+    expect(avatar).toMatch(/^media\/site\/avatar-.+\.webp$/);
+
+    // The stored avatar is re-encoded: no GPS or EXIF survives.
+    const stored = join(dir, 'stored.webp');
+    await s.download(avatar!, stored);
+    const tags = JSON.parse((await run('exiftool', ['-j', '-n', stored])).stdout)[0] as Record<string, unknown>;
+    expect(Object.keys(tags).filter((k) => /^(GPS|Make$|Model$|Orientation$|DateTimeOriginal$)/.test(k))).toEqual([]);
+
+    await saveSite(s, { ...(await loadSite(s)), avatar: 'media/site/avatar-keep.webp' });
+    const again = await stageImport(s, files, { importer: 'instagram' });
+    await runImport(again.id, deps(s).d);
+    expect((await loadSite(s)).avatar).toBe('media/site/avatar-keep.webp');
+  });
+
+  it('does not look for the profile photo when the site already has an avatar', async () => {
+    const s = testStore('run-avatar-set');
+    const avatar = vi.spyOn(IMPORTERS.find((i) => i.name === 'instagram')!, 'avatar');
+    await saveSite(s, { ...(await loadSite(s)), avatar: 'media/site/avatar-keep.webp' });
+    const st = await stageImport(s, instagramJson({ malformed: false }), { importer: 'instagram' });
+    await runImport(st.id, deps(s).d);
+    expect(avatar).not.toHaveBeenCalled();
+    expect((await loadSite(s)).avatar).toBe('media/site/avatar-keep.webp');
+  });
+
+  it('neither overwrites nor deletes an avatar the owner uploads while the import runs', async () => {
+    const s = testStore('run-avatar-race');
+    const dir = await mkdtemp(join(workRoot, 'av-'));
+    await makeJpeg(join(dir, 'p.jpg'), { width: 400, height: 300 });
+    const jpeg = await readFile(join(dir, 'p.jpg'));
+    const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': jpeg, 'media/other/single.jpg': jpeg };
+    const st = await stageImport(s, files, { importer: 'instagram' });
+    const mine = 'media/site/avatar-mine.webp';
+    const download = s.download.bind(s);
+    // The owner saves their own avatar while the profile photo is being downloaded.
+    vi.spyOn(s, 'download').mockImplementation(async (key, file) => {
+      if (key.endsWith('media/other/new.jpg') && !(await loadSite(s)).avatar) {
+        await s.put(mine, 'owner', 'image/webp');
+        await saveSite(s, { ...(await loadSite(s)), avatar: mine });
+      }
+      return download(key, file);
+    });
+    await runImport(st.id, deps(s).d);
+    expect((await loadSite(s)).avatar).toBe(mine);
+    expect((await s.list('media/site/')).map((o) => o.key)).toEqual([mine]);
+  });
+
+  it('does not fail the import when the profile photo is not an image', async () => {
+    const s = testStore('run-avatar-bad');
+    const files = { ...instagramJson({ malformed: false }), 'media/other/new.jpg': 'not an image', 'media/other/single.jpg': 'x' };
+    const st = await stageImport(s, files, { importer: 'instagram' });
+    const status = await runImport(st.id, deps(s).d);
+    expect(status!.state).toBe('done');
+    expect((await loadSite(s)).avatar).toBeNull();
+  });
+
+  it('passes the configured kinds to select, so files of hidden kinds are not selected', async () => {
+    const s = testStore('run-ig-kinds');
+    const select = vi.spyOn(IMPORTERS.find((i) => i.name === 'instagram')!, 'select');
+    const st = await stageImport(s, instagramJson({ malformed: false }), { importer: 'instagram' });
+    await runImport(st.id, deps(s, { config: resolveConfig({ preset: 'instagram', kinds: ['post'] }, {}) }).d);
+    expect(select).toHaveBeenCalledWith(expect.anything(), ['post']);
   });
 });

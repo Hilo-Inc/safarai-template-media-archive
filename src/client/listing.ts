@@ -1,5 +1,6 @@
 import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
-import type { ListingEntry } from '../importers/types';
+import { MAX_TEXT_BYTES } from '../importers/text';
+import type { Listing, ListingEntry } from '../importers/types';
 
 export interface Source {
   path: string;
@@ -62,6 +63,19 @@ export async function listFiles(files: File[]): Promise<{ sources: Map<string, S
 
 export function toEntries(sources: Map<string, Source>): ListingEntry[] {
   return [...sources.values()].map((s) => ({ path: s.path, size: s.size, lastModified: s.lastModified }));
+}
+
+/** The dropped files as an importer Listing, so importers can read their JSON in the browser before anything is uploaded. */
+export function sourceListing(sources: Map<string, Source>): Listing {
+  return {
+    entries: toEntries(sources),
+    async readText(path) {
+      const s = sources.get(path);
+      if (!s) throw new Error(`Not in the drop: ${path}`);
+      if (s.size > MAX_TEXT_BYTES) throw new Error(`Too large to read: ${path}`);
+      return (await s.blob()).text();
+    },
+  };
 }
 
 /** What still needs uploading for an import's file list, given what the bucket already has. */

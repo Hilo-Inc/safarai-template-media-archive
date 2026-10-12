@@ -90,6 +90,27 @@ describe('planIndex', () => {
     expect(plan.has(keys.indexPage('kind/story', 1))).toBe(false);
   });
 
+  it('keeps a story at 23:30 UTC on the last day of a month in that month, and counts stories per month', () => {
+    const out = planIndex(
+      [
+        makePost('instagram_a', '2024-01-31T23:30:00.000Z', { kind: 'story' }),
+        makePost('instagram_b', '2024-02-02T09:00:00.000Z', { kind: 'story' }),
+        makePost('instagram_c', '2024-02-02T10:00:00.000Z', { kind: 'story' }),
+      ],
+      config,
+      now,
+    );
+    const jan = out.get(keys.storyMonth('2024-01')) as StoryMonth;
+    expect(jan.posts.map((p) => [p.id, p.day])).toEqual([['instagram_a', 31]]);
+    expect((out.get(keys.indexMeta) as IndexMeta).storyCounts).toEqual({ '2024-01': 1, '2024-02': 2 });
+  });
+
+  it('leaves hidden stories out of the month indexes and counts', () => {
+    const out = planIndex([makePost('instagram_h', '2024-03-01T00:00:00.000Z', { kind: 'story', hidden: true })], config, now);
+    expect(out.has(keys.storyMonth('2024-03'))).toBe(false);
+    expect(out.get(keys.indexMeta) as IndexMeta).toMatchObject({ storyMonths: [], storyCounts: {} });
+  });
+
   it('indexes each platform, kind and safe tag, and counts them', () => {
     const posts = [
       makePost('files_a', day(1), { tags: ['sun', 'beach'] }),

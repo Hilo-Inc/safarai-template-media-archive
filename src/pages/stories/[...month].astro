@@ -1,0 +1,49 @@
+---
+import Header from '../../components/Header.astro';
+import Layout from '../../components/Layout.astro';
+import Missing from '../../components/Missing.astro';
+import StoriesViewer from '../../components/StoriesViewer.astro';
+import StoryDays from '../../components/StoryDays.astro';
+import StoryMonths from '../../components/StoryMonths.astro';
+import { getEnv } from '../../env';
+import { monthLabel } from '../../render/stories';
+import { absoluteUrl, loadChrome, loadStoryMonth, pageDeps } from '../../server/pages';
+
+const deps = pageDeps();
+const role = Astro.locals.role;
+const chrome = await loadChrome(deps);
+const months = chrome.stories ? (chrome.meta?.storyMonths ?? []) : [];
+const month = Astro.params.month ?? months.at(-1) ?? null;
+const data = month && chrome.stories ? await loadStoryMonth(month, deps) : null;
+if (!data) Astro.response.status = 404;
+const title = data ? `Stories, ${monthLabel(data.month)} · ${chrome.site.title}` : chrome.site.title;
+---
+<Layout
+  title={title}
+  visibility={deps.config.visibility}
+  description={chrome.site.bio || undefined}
+  og={{ title, description: chrome.site.bio, url: absoluteUrl(getEnv().siteUrl, Astro.url.pathname), image: null }}
+>
+  <main>
+    <Header chrome={chrome} current="/stories" role={role} />
+    {data ? (
+      <div class="stories" data-stories data-month={data.month} data-months={JSON.stringify(months)}>
+        <StoryMonths months={months} counts={chrome.meta?.storyCounts ?? {}} current={data.month} />
+        <section aria-label={`Stories, ${monthLabel(data.month)}`}>
+          <h1>{monthLabel(data.month)}</h1>
+          <StoryDays month={data} />
+        </section>
+        <script type="application/json" data-stories-index set:html={JSON.stringify(data).replace(/</g, '\\u003c')} />
+        <StoriesViewer />
+      </div>
+    ) : (
+      <Missing message="There are no stories here." />
+    )}
+  </main>
+</Layout>
+
+<style>
+  .stories { display: grid; gap: var(--sp-4); padding: var(--sp-4); }
+  .stories h1 { font-size: var(--fs-lg); margin: 0 0 var(--sp-3); }
+  @media (min-width: 736px) { .stories { grid-template-columns: 12rem 1fr; } }
+</style>

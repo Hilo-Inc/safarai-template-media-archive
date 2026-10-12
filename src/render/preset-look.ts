@@ -15,8 +15,8 @@ export interface Look {
 
 const SQUARE: Look = { tile: 'square', tileAspect: '1 / 1', columns: 3, desktopColumns: 4, minTileWidth: null, durationBadge: false };
 
-// The Instagram preset's full look (4:5 tiles, profile header, stories) arrives with Plan 3; until then it is the
-// neutral square grid at Instagram's three columns.
+// The Instagram preset's full look (4:5 tiles, profile header with yearly highlights) is a later plan; until then it is
+// the neutral square grid at Instagram's three columns. Stories already have their own pages (/stories).
 const LOOKS: Record<Preset, Look> = {
   generic: SQUARE,
   facebook: SQUARE,

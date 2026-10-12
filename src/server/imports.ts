@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { readManifest, writeManifest } from '../indexer/import-files';
 import type { ImportQueue } from '../indexer/queue';
 import { IMPORT_ID_RE, listStatuses, newImportId, newStatus, readStatus, writeStatus, type ImportStatus } from '../indexer/status';
-import { getImporter } from '../importers/registry';
+import { chooseImporter, getImporter } from '../importers/registry';
 import { keys } from '../lib/keys';
 import type { Store, UploadRequest } from '../lib/store';
 import { importPathProblem, MAX_PATH_LENGTH, parseUploadKey } from '../lib/upload-key';
@@ -17,7 +17,7 @@ const entrySchema = z.strictObject({
 });
 
 const createSchema = z.strictObject({
-  importer: z.string().max(40).default('generic'),
+  importer: z.string().max(40).optional(),
   entries: z.array(entrySchema).min(1).max(200_000),
 });
 
@@ -51,14 +51,16 @@ export async function createImport(store: Store, body: unknown, now = new Date()
     if (seen.has(e.path)) return fail(400, `Listed twice: ${e.path}`);
     seen.add(e.path);
   }
-  const importer = getImporter(name);
-  if (!importer) return fail(400, `Unknown importer "${name}"`);
-
   // Selection works from paths alone here; the runner selects again with the files' contents.
-  const selection = await importer.select({
-    entries,
-    readText: () => Promise.reject(new Error('Files are not uploaded yet')),
-  });
+  const listing = { entries, readText: () => Promise.reject(new Error('Files are not uploaded yet')) };
+  let importer = name === undefined ? null : getImporter(name);
+  if (name !== undefined && !importer) return fail(400, `Unknown importer "${name}"`);
+  if (!importer) {
+    const chosen = chooseImporter(listing);
+    if (!chosen.ok) return fail(400, chosen.reason);
+    importer = chosen.importer;
+  }
+  const selection = importer.admit ? importer.admit(entries) : await importer.select(listing);
   if (!selection.ok) return fail(400, selection.reason);
 
   const id = newImportId(now.getTime());
@@ -149,9 +151,12 @@ export async function reindex(store: Store, queue: QueueLike, now = new Date()):
     void queue.requestRebuild();
     return json(202, { id: null });
   }
+  const entries = inbox.map((o) => ({ path: o.key.slice(keys.inbox.length), size: o.size, lastModified: null }));
+  const chosen = chooseImporter({ entries, readText: () => Promise.reject(new Error('Not read here')) });
+  if (!chosen.ok) return fail(400, chosen.reason);
   const id = newImportId(now.getTime());
   const bytes = inbox.reduce((n, o) => n + o.size, 0);
-  await writeStatus(store, newStatus({ id, importer: 'generic', source: 'inbox', files: inbox.length, bytes, state: 'queued' }, now));
+  await writeStatus(store, newStatus({ id, importer: chosen.importer.name, source: 'inbox', files: inbox.length, bytes, state: 'queued' }, now));
   queue.enqueue(id);
   return json(202, { id });
 }

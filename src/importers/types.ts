@@ -13,7 +13,16 @@ export interface Listing {
   readText(path: string): Promise<string>;
 }
 
-export type Selection = { ok: true; files: ListingEntry[]; media: number; sidecars: number } | { ok: false; reason: string };
+export type Selection =
+  | {
+      ok: true;
+      files: ListingEntry[];
+      media: number;
+      sidecars: number;
+      /** Referenced media found in no dropped part (Instagram). */
+      missing?: number;
+    }
+  | { ok: false; reason: string };
 
 export interface ImportFiles extends Listing {
   download(path: string, file: string): Promise<void>;
@@ -45,6 +54,11 @@ export interface Importer {
   name: string;
   label: string;
   detect(listing: Listing): boolean;
-  select(listing: Listing): Promise<Selection>;
+  /** Server side, before upload: the files it accepts, from paths alone. Without it the server calls `select`. */
+  admit?(entries: ListingEntry[]): Selection;
+  /** The files to upload. `kinds` (the site's configured kinds) lets an importer leave out kinds the site never shows. */
+  select(listing: Listing, kinds?: readonly Kind[]): Promise<Selection>;
   read(files: Listing, config: ArchiveConfig): Promise<RawPost[]>;
+  /** Path of a picture for the site avatar, when the export has one. */
+  avatar?(files: Listing): Promise<string | null>;
 }

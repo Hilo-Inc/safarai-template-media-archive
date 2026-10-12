@@ -12,7 +12,7 @@ const MEDIA = new Set([...MEDIA_EXTENSIONS.image, ...MEDIA_EXTENSIONS.video, ...
 const SUBTITLES = new Set(['srt', 'vtt']);
 
 /** Media files, plus files with no extension (their type is detected from their bytes during processing). */
-function isMediaCandidate(path: string): boolean {
+export function isMediaCandidate(path: string): boolean {
   if (isDirectoryEntry(path) || isDeniedName(path)) return false;
   const ext = extOf(path);
   return ext === '' ? !baseName(path).startsWith('.') : MEDIA.has(ext);

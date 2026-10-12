@@ -1,17 +1,17 @@
 import { z } from 'zod';
+import { MAX_TEXT_BYTES } from '../importers/text';
 import type { ImportFiles, ListingEntry } from '../importers/types';
 import { ImportError } from './errors';
 import { keys } from '../lib/keys';
 import { PRIVATE_JSON } from '../lib/site';
 import type { Store } from '../lib/store';
 
-/** Sidecar JSON and subtitles are small; anything bigger is not read as text. */
-export const MAX_TEXT_BYTES = 5 * 1024 * 1024;
-
 export interface Manifest {
   id: string;
   importer: string;
   entries: ListingEntry[];
+  /** Paths whose objects were deleted once their posts finished. They stay in `entries` so the listing, and with it every id, is stable. */
+  released?: string[];
 }
 
 /**
@@ -33,7 +33,7 @@ const entrySchema = z.object({
 
 /** The stored file list; entries that are not normalised or well formed are dropped. */
 export async function readManifest(store: Store, id: string): Promise<Manifest | null> {
-  const raw = await store.getJson<{ id?: unknown; importer?: unknown; entries?: unknown }>(keys.importManifest(id));
+  const raw = await store.getJson<{ id?: unknown; importer?: unknown; entries?: unknown; released?: unknown }>(keys.importManifest(id));
   if (!raw || typeof raw !== 'object' || typeof raw.importer !== 'string' || !Array.isArray(raw.entries)) return null;
   const entries: ListingEntry[] = [];
   const seen = new Set<string>();
@@ -43,7 +43,9 @@ export async function readManifest(store: Store, id: string): Promise<Manifest |
     seen.add(parsed.data.path);
     entries.push(parsed.data);
   }
-  return { id, importer: raw.importer, entries };
+  const listed = new Set(entries.map((e) => e.path));
+  const released = Array.isArray(raw.released) ? raw.released.filter((p): p is string => isNormalPath(p) && listed.has(p)) : [];
+  return { id, importer: raw.importer, entries, ...(released.length ? { released } : {}) };
 }
 
 export async function writeManifest(store: Store, manifest: Manifest): Promise<void> {
@@ -79,8 +81,9 @@ export async function uploadedImportFiles(store: Store, id: string): Promise<Imp
   if (!manifest) throw new ImportError('This import has no file list');
   const prefix = keys.importPrefix(id);
   const sizes = new Map((await store.list(prefix)).map((o) => [o.key.slice(prefix.length), o.size]));
-  const present = manifest.entries.filter((e) => sizes.get(e.path) === e.size);
-  const missing = manifest.entries.filter((e) => sizes.get(e.path) !== e.size);
+  const released = new Set(manifest.released);
+  const present = manifest.entries.filter((e) => released.has(e.path) || sizes.get(e.path) === e.size);
+  const missing = manifest.entries.filter((e) => !released.has(e.path) && sizes.get(e.path) !== e.size);
   return { ...bucketFiles(store, prefix, present), missing };
 }
 

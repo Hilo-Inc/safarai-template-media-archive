@@ -16,8 +16,11 @@ const ext = mediaExtensionText();
   <h2>Photo posts saved with gallery-dl</h2>
   <p>Run gallery-dl with <code>--write-metadata</code>. Files of the same post are grouped into one post in their original order, with the caption and date from the <code>.json</code> files.</p>
 
-  <h2>Instagram and Facebook exports</h2>
-  <p>The importer for the zips you download from Instagram or Facebook ("Download your information") arrives in a later update. Until then, an export like that is refused as a whole, and nothing in it is uploaded.</p>
+  <h2>Instagram exports</h2>
+  <p>In Instagram, open Settings → Accounts Center → Your information and permissions → Export your information, and choose Format: <strong>JSON</strong> and Date range: All time. Drop every zip part here together. Posts, carousels, reels and stories are imported, and the newest profile photo becomes the site's picture if it has none. Archived and recently deleted posts, IGTV videos, messages, comments, contacts and login history are not uploaded. The HTML version of the export is refused.</p>
+
+  <h2>Facebook exports</h2>
+  <p>The importer for Facebook's "Download your information" zips arrives in a later update. Until then, an export like that is refused as a whole, and nothing in it is uploaded.</p>
 
   <h2>What is never uploaded</h2>
   <p>Messages, contacts, followers, login and security records, ads data, and anything else that is not a photo, video, audio file or its caption file. GPS positions are removed from photos and videos unless the site's configuration keeps them.</p>

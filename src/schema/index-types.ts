@@ -48,6 +48,8 @@ export interface IndexMeta {
   /** Page count per index scope: "all", "<platform>", "kind/<kind>", "tag/<tag>". */
   pages: Record<string, number>;
   storyMonths: string[];
+  /** Visible stories per month ("YYYY-MM"), for the stories pages' month list. */
+  storyCounts?: Record<string, number>;
   /** Tags of visible posts, most used first. */
   tags: string[];
 }

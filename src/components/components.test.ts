@@ -158,6 +158,7 @@ describe('Header', () => {
       { kind: 'post', label: 'Posts', count: 24 },
       { kind: 'video', label: 'Videos', count: 11 },
     ],
+    stories: false,
     ...extra,
   });
 
@@ -178,6 +179,15 @@ describe('Header', () => {
     expect(viewer).not.toContain('href="/admin"');
     const admin = await container.renderToString(Header, { props: { chrome: chrome(), current: '/', role: 'admin' } });
     expect(admin).toContain('href="/admin"');
+  });
+
+  it('shows a Stories tab, current on /stories, and keeps the bar with no kind tabs', async () => {
+    const meta = { counts: { all: 4, platforms: {}, kinds: { story: 4 } } } as unknown as Chrome['meta'];
+    const html = await container.renderToString(Header, { props: { chrome: chrome({ stories: true, meta, tabs: [] }), current: '/stories', role: null } });
+    expect(html).toContain('<a href="/stories" aria-current="page"');
+    expect(html).toContain('Stories');
+    expect(html).toContain('tabbar');
+    expect(await container.renderToString(Header, { props: { chrome: chrome(), current: '/', role: null } })).not.toContain('/stories');
   });
 
   it('compact form: title linking home, no bio, no tabs', async () => {

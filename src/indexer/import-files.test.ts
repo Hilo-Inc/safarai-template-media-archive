@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Store } from '../lib/store';
+import { MAX_TEXT_BYTES } from '../importers/text';
 import { inboxImportFiles, isNormalPath } from './import-files';
+
+describe('MAX_TEXT_BYTES', () => {
+  it('lets a large posts.json through (the real one is several MB)', () => {
+    expect(MAX_TEXT_BYTES).toBe(32 * 1024 * 1024);
+  });
+});
 
 describe('isNormalPath', () => {
   it('accepts plain relative forward-slash paths', () => {

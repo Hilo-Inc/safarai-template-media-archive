@@ -4,6 +4,9 @@ export function hashtags(text: string): string[] {
   return [...out];
 }
 
+/** Largest text file an importer reads (an Instagram posts.json runs to several MB). The browser and the indexer share it. */
+export const MAX_TEXT_BYTES = 32 * 1024 * 1024;
+
 /** A post id part: [A-Za-z0-9._-], no leading/trailing separators, at most 80 characters. */
 export function slugId(raw: string): string {
   const s = raw

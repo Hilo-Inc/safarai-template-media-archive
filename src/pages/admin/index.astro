@@ -9,7 +9,7 @@ const notice = feedNotice(loadConfig(), getEnv());
 <AdminLayout title="Import" current="/admin">
   {notice && <p class="notice">{notice}</p>}
 
-  <section class="drop" data-drop>
+  <section class="drop" data-drop data-kinds={JSON.stringify(loadConfig().kinds)}>
     <p><strong>Drop your export zips here</strong>, or a folder of photos, videos and music.</p>
     <p>
       <label><input type="file" multiple data-pick-files accept=".zip,image/*,video/*,audio/*,.json,.vtt,.srt" /> Choose files</label>

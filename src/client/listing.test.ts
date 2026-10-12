@@ -1,8 +1,9 @@
 import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 import { describe, expect, it } from 'vitest';
 import { isNormalPath } from '../indexer/import-files';
+import { MAX_TEXT_BYTES } from '../importers/text';
 import { MAX_PATH_LENGTH } from '../lib/upload-key';
-import { batches, chunkSize, listFiles, listFilesNamingZip, MAX_PATH, MIN_PART, normalizePath, planUploads, toEntries, type Source } from './listing';
+import { batches, chunkSize, listFiles, listFilesNamingZip, MAX_PATH, MIN_PART, normalizePath, planUploads, sourceListing, toEntries, type Source } from './listing';
 
 async function zip(name: string, files: Record<string, string>): Promise<File> {
   const writer = new ZipWriter(new BlobWriter('application/zip'));
@@ -124,5 +125,17 @@ describe('listFilesNamingZip', () => {
     const bad = new File(['this is not a zip'], 'broken.zip', { type: 'application/zip' });
     await expect(listFilesNamingZip([good, bad])).rejects.toThrow('broken.zip');
     expect([...(await listFilesNamingZip([good])).sources.keys()]).toEqual(['a.jpg']);
+  });
+});
+
+describe('sourceListing', () => {
+  it('reads text from the dropped files and refuses oversized ones', async () => {
+    const small = { path: 'a.json', size: 2, lastModified: null, blob: async () => new Blob(['{}']) };
+    const big = { path: 'b.json', size: MAX_TEXT_BYTES + 1, lastModified: null, blob: async () => new Blob(['x']) };
+    const listing = sourceListing(new Map([['a.json', small], ['b.json', big]]));
+    expect(listing.entries.map((e) => e.path)).toEqual(['a.json', 'b.json']);
+    expect(await listing.readText('a.json')).toBe('{}');
+    await expect(listing.readText('b.json')).rejects.toThrow();
+    await expect(listing.readText('c.json')).rejects.toThrow();
   });
 });

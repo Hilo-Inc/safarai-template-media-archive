@@ -58,10 +58,29 @@ describe('imports API', () => {
       expect((await body(res)).error).toContain(bad);
     }
     expect((await createImport(s, { importer: 'nope', entries: [entry('a.jpg')] })).status).toBe(400);
-    const meta = await createImport(s, { entries: [entry('your_instagram_activity/media/posts_1.json'), entry('media/a.jpg')] });
+    const meta = await createImport(s, { entries: [entry('your_facebook_activity/posts/your_posts_1.json'), entry('media/a.jpg')] });
     expect(meta.status).toBe(400);
     expect((await body(meta)).error).toContain('Instagram or Facebook export');
+    const html = await createImport(s, { entries: [entry('your_instagram_activity/media/posts_1.html'), entry('media/a.jpg')] });
+    expect(html.status).toBe(400);
+    expect((await body(html)).error).toContain('HTML version');
     expect(await s.list(keys.importStatusPrefix)).toEqual([]);
+  });
+
+  it('chooses the instagram importer and admits only its files', async () => {
+    const s = testStore('api-create-ig');
+    const res = await createImport(s, {
+      entries: [
+        entry('your_instagram_activity/media/posts_1.json'),
+        entry('your_instagram_activity/media/igtv_videos.json'),
+        entry('media/posts/202401/a.jpg'),
+        entry('your_instagram_activity/messages/inbox/x/message_1.json'),
+      ],
+    });
+    expect(res.status).toBe(201);
+    const { id, files } = await body(res);
+    expect(files.map((f: { path: string }) => f.path).sort()).toEqual(['media/posts/202401/a.jpg', 'your_instagram_activity/media/posts_1.json']);
+    expect(await readStatus(s, id)).toMatchObject({ importer: 'instagram' });
   });
 
   it('signs uploads only for files in the list while uploading', async () => {
@@ -145,6 +164,18 @@ describe('imports API', () => {
     expect(await readStatus(s, id)).toMatchObject({ source: 'inbox', state: 'queued', files: 1, bytes: 3 });
     expect(queue.enqueue).toHaveBeenCalledWith(id);
     expect((await reindex(s, queue)).status).toBe(409);
+  });
+
+  it('re-indexes an Instagram export in the inbox with the instagram importer, and refuses a Facebook one', async () => {
+    const ig = testStore('api-reindex-ig');
+    await ig.put('inbox/your_instagram_activity/media/posts_1.json', '{}', 'application/json');
+    await ig.put('inbox/media/posts/a.jpg', 'abc', 'image/jpeg');
+    const { id } = await body(await reindex(ig, fakeQueue()));
+    expect(await readStatus(ig, id)).toMatchObject({ source: 'inbox', importer: 'instagram' });
+
+    const fb = testStore('api-reindex-fb');
+    await fb.put('inbox/your_facebook_activity/x.json', '{}', 'application/json');
+    expect((await reindex(fb, fakeQueue())).status).toBe(400);
   });
 });
 
