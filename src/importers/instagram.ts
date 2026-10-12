@@ -35,12 +35,15 @@ function counted(files: ListingEntry[], missing?: number): Selection {
   return { ok: true, files, media, sidecars: files.length - media, ...(missing === undefined ? {} : { missing }) };
 }
 
+/** Instagram only puts extensionless media under a `media` folder; elsewhere an extensionless file is not media. */
+const mediaForAdmit = (path: string) => (extOf(path) === '' ? path.toLowerCase().split('/').slice(0, -1).includes('media') : isMediaCandidate(path));
+
 function admit(entries: ListingEntry[]): Selection {
   const reason = refusal(entries.map((e) => e.path));
   if (reason) return { ok: false, reason };
   const json = new Set([...exportJsonFiles(entries).values()].map((e) => e.path));
   const keep = entries.filter(
-    (e) => !isDeniedPath(e.path) && !isJunkPath(e.path) && (json.has(e.path) || isMediaCandidate(e.path) || ['srt', 'vtt'].includes(extOf(e.path))),
+    (e) => !isDeniedPath(e.path) && !isJunkPath(e.path) && (json.has(e.path) || mediaForAdmit(e.path) || ['srt', 'vtt'].includes(extOf(e.path))),
   );
   return counted(keep);
 }

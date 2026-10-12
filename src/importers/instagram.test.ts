@@ -59,6 +59,19 @@ describe('instagram admit', () => {
     const sel = ig.admit!([e(`${IG}posts_1.json`), e(`${IG}igtv_videos.json`), e('media/posts/a.jpg'), e('media/other/r.srt'), e('your_instagram_activity/messages/inbox/a/p.jpg'), e('notes.txt')]);
     expect(sel.ok && sel.files.map((f) => f.path)).toEqual([`${IG}posts_1.json`, 'media/posts/a.jpg', 'media/other/r.srt']);
   });
+  const admitted = (...paths: string[]) => {
+    const sel = ig.admit!([e(`${IG}posts_1.json`), ...paths.map(e)]);
+    return sel.ok ? sel.files.map((f) => f.path).filter((p) => p !== `${IG}posts_1.json`) : sel.reason;
+  };
+  it('admits extensionless files only from media folders', () => {
+    expect(admitted('your_instagram_activity/likes/liked_posts')).toEqual([]);
+    expect(admitted('media/other/s4', 'export/Media/other/s5')).toEqual(['media/other/s4', 'export/Media/other/s5']);
+  });
+  it('never admits subtitles in denied folders, junk entries, or allowlisted JSON names under a denied parent', () => {
+    expect(admitted('your_instagram_activity/messages/inbox/a/x.srt', 'your_instagram_activity/messages/inbox/a/x.vtt')).toEqual([]);
+    expect(admitted('__MACOSX/a.jpg', 'media/._a.jpg')).toEqual([]);
+    expect(admitted('messages/your_instagram_activity/media/posts_1.json')).toEqual([]);
+  });
   it('refuses exports that are not Instagram JSON', () => {
     expect(ig.admit!([e('your_facebook_activity/posts/x.json')])).toMatchObject({ ok: false, reason: expect.stringContaining('Instagram or Facebook export') });
     expect(ig.admit!([e('your_instagram_activity/media/posts_1.html')])).toMatchObject({ ok: false, reason: expect.stringContaining('HTML version') });
