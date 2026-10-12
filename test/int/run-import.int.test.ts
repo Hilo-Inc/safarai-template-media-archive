@@ -95,9 +95,9 @@ describe('runImport', () => {
 
     expect(first).toMatchObject({ state: 'done', posts: { done: 1, failed: 1 }, failures: [{ postId: 'files_b', path: 'b.jpg', reason: 'Broken file' }] });
     expect(await s.exists(keys.post('files_b'))).toBe(false);
-    // The finished post's file is already gone; the failed one's stays for the retry, and the manifest no longer lists the deleted file.
+    // The finished post's file is already gone; the failed one's stays for the retry. The manifest still lists both, so ids stay stable.
     expect((await s.list(keys.importPrefix(staged.id))).map((o) => o.key.slice(keys.importPrefix(staged.id).length))).toEqual(['b.jpg']);
-    expect((await readManifest(s, staged.id))!.entries.map((e) => e.path)).toEqual(['b.jpg']);
+    expect((await readManifest(s, staged.id))!.entries.map((e) => e.path)).toEqual(['a.jpg', 'b.jpg']);
 
     await s.putJson(keys.importStatus(staged.id), { ...first, state: 'queued' });
     calls.length = 0;
@@ -117,14 +117,37 @@ describe('runImport', () => {
       const st = await stageImport(s, files);
       await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_f7'])) }).d);
       expect(await left(s, st.id)).toEqual(['f7.jpg']);
-      expect((await readManifest(s, st.id))!.entries.map((e) => e.path)).toEqual(['f7.jpg']);
+      expect((await readManifest(s, st.id))!.entries).toHaveLength(30);
     });
 
-    it('never deletes a file no post references (a JSON file stays until the upload is discarded)', async () => {
+    it('keeps ids stable on retry when same-named files sit in different folders', async () => {
+      const files = { 'a/photo.jpg': 'a', 'b/photo.jpg': 'b' };
+      // The second file gets a hashed id; learn it from a probe run.
+      const probe = testStore('run-release-ids-probe');
+      const probeCalls: string[] = [];
+      await runImport((await stageImport(probe, files)).id, deps(probe, { process: fakeProcess(probeCalls) }).d);
+      const hashed = probeCalls.find((c) => c !== 'files_photo')!;
+      expect(hashed).toMatch(/^files_photo-/);
+
+      const s = testStore('run-release-ids');
+      const st = await stageImport(s, files);
+      const calls: string[] = [];
+      const first = await runImport(st.id, deps(s, { process: fakeProcess(calls, new Set([hashed])) }).d);
+      expect(first).toMatchObject({ posts: { done: 1, failed: 1 } });
+
+      await s.putJson(keys.importStatus(st.id), { ...first, state: 'queued' });
+      calls.length = 0;
+      const second = await runImport(st.id, deps(s, { process: fakeProcess(calls) }).d);
+      expect(calls).toEqual([hashed]);
+      expect(second).toMatchObject({ state: 'done', posts: { done: 2, failed: 0 } });
+      expect(await s.exists(keys.post(hashed))).toBe(true);
+    });
+
+    it('never deletes a selected file no post references (a sidecar stays until the upload is discarded)', async () => {
       const s = testStore('run-release-json');
-      const st = await stageImport(s, { 'a.jpg': 'a', 'b.jpg': 'b', 'extra.json': '{}' });
+      const st = await stageImport(s, { 'a.jpg': 'a', 'a.jpg.json': '{}', 'b.jpg': 'b' });
       await runImport(st.id, deps(s, { process: fakeProcess([], new Set(['files_b'])) }).d);
-      expect(await left(s, st.id)).toEqual(['b.jpg', 'extra.json']);
+      expect(await left(s, st.id)).toEqual(['a.jpg.json', 'b.jpg']);
     });
 
     it('deletes nothing from the inbox while a post has failed', async () => {

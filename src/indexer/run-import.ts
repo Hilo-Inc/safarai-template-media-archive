@@ -130,11 +130,14 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
     const released: string[] = [];
     const release = async () => {
       if (released.length === 0) return;
-      const gone = new Set(released.splice(0));
+      // The manifest keeps every entry, so the listing (and every importer's ids) is the same on a retry; it only records
+      // which files are gone, so they are not reported as unfinished uploads. Recorded first: a crash in between leaves
+      // stray objects (removed with the upload), never a file that is listed as present but gone.
+      // Only posts that are not done are read again, and their files are never released.
+      const gone = released.splice(0);
       const manifest = await readManifest(store, id);
-      // The manifest first: a crash in between leaves stray objects (removed with the upload), never a listed file that is gone.
-      if (manifest) await writeManifest(store, { ...manifest, entries: manifest.entries.filter((e) => !gone.has(e.path)) });
-      await store.deleteKeys([...gone].map((p) => keys.importPrefix(id) + p));
+      if (manifest) await writeManifest(store, { ...manifest, released: [...new Set([...(manifest.released ?? []), ...gone])] });
+      await store.deleteKeys(gone.map((p) => keys.importPrefix(id) + p));
     };
     let handled = 0;
     for (const raw of raws) {
@@ -147,10 +150,12 @@ export async function runImport(id: string, deps: RunDeps): Promise<ImportStatus
         }
       }
       if (++handled % STATUS_EVERY === 0) {
-        await release();
+        // Status first: files are only deleted once their posts are recorded as done.
         await writeStatus(store, status);
+        await release();
       }
     }
+    await writeStatus(store, status);
     await release();
 
     await deps.build();
