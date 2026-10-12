@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminSummary } from '../schema/index-types';
-import { cleanLinks, SavedValue, filterPosts, importActions, importLabel, selectionSummary, type ImportView } from './admin-view';
+import { cleanLinks, SavedValue, filterPosts, importActions, importLabel, instagramSummary, missingLine, selectionSummary, type ImportView } from './admin-view';
 
 const status = (extra: Partial<ImportView> = {}): ImportView => ({
   id: 'lx0abc12-0a1b2c',
@@ -139,5 +139,18 @@ describe('SavedValue overlapping failures', () => {
     b.confirm();
     const c = saved.begin('c')!;
     expect(c.revert()).toBe('b');
+  });
+});
+
+describe('instagramSummary and missingLine', () => {
+  const e = (path: string, size: number) => ({ path, size, lastModified: null });
+  it('says what is uploaded and what stays on the computer', () => {
+    const many = Array.from({ length: 4840 }, (_, i) => e(`m/${i}.jpg`, 1_115_702));
+    expect(instagramSummary(many)).toBe('4,840 files, 5.4 GB to upload. Messages, comments, contacts and login history stay on your computer.');
+  });
+  it('asks for the missing parts', () => {
+    expect(missingLine(212)).toBe('212 files are referenced but not in what you dropped. Did you add every part of the export?');
+    expect(missingLine(1)).toBe('1 file is referenced but not in what you dropped. Did you add every part of the export?');
+    expect(missingLine(0)).toBe('');
   });
 });

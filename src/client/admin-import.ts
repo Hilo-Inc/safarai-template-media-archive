@@ -1,7 +1,9 @@
 import { formatBytes, formatDate } from '../render/format';
-import { importActions, importLabel, selectionSummary, type ImportAction, type ImportView } from './admin-view';
-import { listFilesNamingZip, planUploads, toEntries, type Source } from './listing';
+import { importActions, importLabel, instagramSummary, missingLine, selectionSummary, type ImportAction, type ImportView } from './admin-view';
+import { listFilesNamingZip, planUploads, sourceListing, type Source } from './listing';
 import { api, uploadAll } from './upload';
+import type { Kind } from '../config/schema';
+import { chooseImporter } from '../importers/registry';
 import type { ListingEntry } from '../importers/types';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -66,9 +68,16 @@ async function handleFiles(files: File[]): Promise<void> {
       if (old.id !== resumeId) await api('DELETE', `/api/imports/${old.id}`, {}).catch(() => undefined);
     }
     if (resumeId) return await resume(resumeId, sources);
-    const created = await api<{ id: string; files: ListingEntry[] }>('POST', '/api/imports', { importer: 'generic', entries: toEntries(sources) });
+    const listing = sourceListing(sources);
+    const chosen = chooseImporter(listing);
+    if (!chosen.ok) throw new Error(chosen.reason);
+    const kinds = JSON.parse(drop.dataset.kinds ?? '[]') as Kind[];
+    const selection = await chosen.importer.select(listing, kinds);
+    if (!selection.ok) throw new Error(selection.reason);
+    const created = await api<{ id: string; files: ListingEntry[] }>('POST', '/api/imports', { importer: chosen.importer.name, entries: selection.files });
     pending = { id: created.id, files: created.files, sources };
-    planText.textContent = selectionSummary(created.files, sources.size) + (duplicates > 0 ? ` ${duplicates} repeated files are uploaded once.` : '');
+    const head = chosen.importer.name === 'instagram' ? instagramSummary(created.files) : selectionSummary(created.files, sources.size);
+    planText.textContent = [head, duplicates > 0 ? `${duplicates} repeated files are uploaded once.` : '', missingLine(selection.missing ?? 0)].filter(Boolean).join(' ');
     $<HTMLButtonElement>('[data-upload]').disabled = false;
     void refresh();
   } catch (error) {

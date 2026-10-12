@@ -6,7 +6,7 @@ import type { AdminSummary } from '../schema/index-types';
 export type ImportView = Omit<ImportStatus, 'doneIds'>;
 export type ImportAction = 'resume' | 'cancel' | 'retry' | 'remove';
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
 
 export function importActions(s: ImportView): ImportAction[] {
   switch (s.state) {
@@ -104,4 +104,14 @@ export class SavedValue {
       },
     };
   }
+}
+
+export function instagramSummary(selected: ListingEntry[]): string {
+  const bytes = selected.reduce((n, e) => n + e.size, 0);
+  return `${plural(selected.length, 'file')}, ${formatBytes(bytes)} to upload. Messages, comments, contacts and login history stay on your computer.`;
+}
+
+export function missingLine(missing: number): string {
+  if (missing <= 0) return '';
+  return `${plural(missing, 'file')} ${missing === 1 ? 'is' : 'are'} referenced but not in what you dropped. Did you add every part of the export?`;
 }
